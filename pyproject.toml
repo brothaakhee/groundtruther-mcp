@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "groundtruther-mcp"
+version = "0.1.0"
+description = "MCP server for GroundTruther — hire humans to complete real-world tasks from your AI agent"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "GroundTruther", email = "hello@groundtruther.io" },
+]
+keywords = ["mcp", "groundtruther", "ai-agent", "human-in-the-loop", "tasks"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+]
+dependencies = [
+    "mcp>=1.0.0",
+    "httpx>=0.25.0",
+    "pydantic>=2.0.0",
+]
+
+[project.scripts]
+groundtruther-mcp = "groundtruther_mcp.server:main"
+
+[project.urls]
+Homepage = "https://groundtruther.io"
+Repository = "https://github.com/brothaakhee/groundtruther"
+Documentation = "https://groundtruther.io/docs"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/groundtruther_mcp"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

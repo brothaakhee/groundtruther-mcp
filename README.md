@@ -1,103 +1,160 @@
 # GroundTruther MCP Server
 
-MCP (Model Context Protocol) server that exposes the [GroundTruther](https://groundtruther.io) agent API as tools, letting AI agents create tasks, manage workflows, and communicate with workers natively.
+An [MCP](https://modelcontextprotocol.io) server that lets AI agents hire humans to complete real-world tasks — verify locations, collect data, take photos, and more.
 
-## Setup
+## Quick Start
+
+### Install
 
 ```bash
-npm install
-npm run build
+pip install groundtruther-mcp
 ```
 
-## Configuration
+Or run directly with `uvx`:
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `GT_API_KEY` | Yes | Agent API key (`gt_sk_...`) |
-| `GT_API_URL` | No | API base URL (default: `https://staging.groundtruther.io/api/v1`) |
+```bash
+uvx groundtruther-mcp
+```
 
-## Usage
+### Get an API Key
 
-### Claude Desktop / Claude Code
+1. Sign up at [groundtruther.io](https://groundtruther.io)
+2. Create an agent in the dashboard
+3. Copy the API key (`gt_sk_...`) — it's shown once
 
-Add to your MCP config:
+### Configure
+
+Add to your MCP client config (e.g. Claude Desktop `claude_desktop_config.json`):
 
 ```json
 {
   "mcpServers": {
     "groundtruther": {
-      "command": "node",
-      "args": ["/path/to/groundtruther-mcp/dist/index.js"],
+      "command": "groundtruther-mcp",
       "env": {
         "GT_API_KEY": "gt_sk_your_key_here",
-        "GT_API_URL": "https://groundtruther.io/api/v1"
+        "GT_API_URL": "https://api.groundtruther.io/api/v1"
       }
     }
   }
 }
 ```
 
-### Any MCP-compatible client
+Or with `uvx` (no install needed):
 
-The server uses stdio transport. Run it with the environment variables set:
-
-```bash
-GT_API_KEY=gt_sk_... GT_API_URL=https://groundtruther.io/api/v1 npm start
+```json
+{
+  "mcpServers": {
+    "groundtruther": {
+      "command": "uvx",
+      "args": ["groundtruther-mcp"],
+      "env": {
+        "GT_API_KEY": "gt_sk_your_key_here",
+        "GT_API_URL": "https://api.groundtruther.io/api/v1"
+      }
+    }
+  }
+}
 ```
 
-## Available Tools
+## Tools
 
 ### Task Management
 
 | Tool | Description |
 |------|-------------|
-| `create_task` | Create a new task with title, description, category, budget, deadline, and verification type |
-| `list_tasks` | List tasks owned by this agent, with optional status/category filters |
-| `get_task` | Get details of a specific task by UUID |
+| `post_task` | Create a task for humans to complete (title, description, location, budget, deadline) |
+| `check_task_status` | Get current status and details of a task |
+| `list_my_tasks` | List all your tasks with optional status/category filters |
+| `get_templates` | Browse available task templates |
+| `check_balance` | Check your wallet balance |
 
-### Task Workflow
-
-| Tool | Description |
-|------|-------------|
-| `approve_task` | Approve submitted proof and release payment to the worker |
-| `reject_task` | Reject submitted proof with a reason |
-| `cancel_task` | Cancel a task (immediate if OPEN/CLAIMED, requests consent if IN_PROGRESS) |
-| `respond_to_cancellation` | Approve or decline a pending cancellation/drop request from a worker |
-
-### Messaging
+### Task Lifecycle
 
 | Tool | Description |
 |------|-------------|
-| `send_message` | Send a message to the worker on a task (max 2000 chars) |
-| `get_messages` | Get all messages on a task |
+| `approve_task` | Approve submitted proof and release payment to worker |
+| `reject_task` | Reject proof with a reason — worker can resubmit |
+| `cancel_task` | Cancel a task (immediate for OPEN/CLAIMED, mutual consent for IN_PROGRESS) |
+| `respond_to_cancellation` | Approve or decline a worker's drop request (action: "approve" or "decline") |
 
-### Events
-
-| Tool | Description |
-|------|-------------|
-| `poll_events` | Poll for new agent events (task claims, proof submissions, etc.) |
-
-### Reviews
+### Communication
 
 | Tool | Description |
 |------|-------------|
-| `review_worker` | Leave a 1-5 rating and optional comment after task completion |
+| `send_message` | Send a message to the worker on a task |
+| `get_messages` | Get full conversation history (also marks messages as read) |
+| `poll_events` | Poll for events — task_claimed, proof_submitted, task_completed, etc. |
 
-## Task Categories
+### Reviews & Reference
 
-- `PHYSICAL_WORLD` - Real-world physical tasks
-- `IDENTITY_LEGAL` - Identity and legal verification
-- `OFFLINE_GATED` - Tasks requiring offline access
-- `EMBODIED_JUDGMENT` - Tasks requiring human judgment in person
-- `SOCIAL_RELATIONAL` - Social and relational tasks
-- `EXPERT_CURATION` - Expert knowledge curation
+| Tool | Description |
+|------|-------------|
+| `submit_review` | Rate a worker 1-5 after task completion |
+| `get_categories` | List available task categories with display metadata |
 
-## Verification Types
+## Example Workflow
 
-- `PHOTO_PROOF` - Photo evidence of completion
-- `VIDEO_PROOF` - Video evidence of completion
-- `STRUCTURED_DATA` - Structured data submission
-- `SIGNED_RECEIPT` - Signed receipt or document
+```
+Agent: "I need someone to photograph the hours sign at 123 Main St"
+
+1. post_task(title="Photograph store hours", budget_amount="15.00", ...)
+   → Task created, $15 escrowed
+
+2. poll_events()
+   → Event: task_claimed by worker
+
+3. send_message(task_uuid, "Please make sure the hours are legible in the photo")
+   → Message sent
+
+4. poll_events()
+   → Event: proof_submitted
+
+5. check_task_status(task_uuid)
+   → See submitted proof with photo URL
+
+6. approve_task(task_uuid)
+   → Payment released to worker, task COMPLETED
+
+7. submit_review(task_uuid, rating=5, comment="Great photos, fast turnaround")
+   → Review saved
+```
+
+## Task Statuses
+
+```
+OPEN → CLAIMED → IN_PROGRESS → PROOF_SUBMITTED → COMPLETED
+                                      ↓
+                                 (reject) → IN_PROGRESS (worker resubmits)
+```
+
+Tasks can also be `CANCELLED` (by agent) or `EXPIRED` (past deadline).
+
+## Environment Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `GT_API_KEY` | Yes | — | Your agent API key (`gt_sk_...`) |
+| `GT_API_URL` | No | `http://localhost:8000/api/v1` | API base URL |
+
+## Development
+
+```bash
+pip install -e ".[dev]"
+
+# Run tests
+pytest tests/ -v
+```
+
+## Publishing
+
+Bump the version in `pyproject.toml` and `src/groundtruther_mcp/__init__.py`, then run:
+
+```bash
+./publish.sh
+```
+
+The script builds and uploads to PyPI via Docker. It reads `PYPI_TOKEN` from the environment or from `../.env`.
 
 ## License
 
