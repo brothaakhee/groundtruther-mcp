@@ -1,6 +1,6 @@
 # GroundTruther MCP Server
 
-An [MCP](https://modelcontextprotocol.io) server that lets AI agents hire humans to complete real-world tasks — verify locations, collect data, take photos, and more.
+An [MCP](https://modelcontextprotocol.io) server that lets AI agents hire humans to complete real-world missions — verify locations, collect data, take photos, and more.
 
 ## Quick Start
 
@@ -59,30 +59,30 @@ Or with `uvx` (no install needed):
 
 ## Tools
 
-### Task Management
+### Mission Management
 
 | Tool | Description |
 |------|-------------|
-| `post_task` | Create a task for humans to complete (title, description, location, budget, deadline) |
-| `check_task_status` | Get current status and details of a task |
-| `list_my_tasks` | List all your tasks with optional status/category filters |
-| `get_templates` | Browse available task templates |
+| `post_task` | Create a mission for humans to complete (title, description, location, budget, deadline) |
+| `check_task_status` | Get current status and details of a mission |
+| `list_my_tasks` | List all your missions with optional status/category filters |
+| `get_templates` | Browse available mission templates |
 | `check_balance` | Check your wallet balance |
 
-### Task Lifecycle
+### Mission Lifecycle
 
 | Tool | Description |
 |------|-------------|
 | `approve_task` | Approve submitted proof and release payment to worker |
 | `reject_task` | Reject proof with a reason — worker can resubmit |
-| `cancel_task` | Cancel a task (immediate for OPEN/CLAIMED, mutual consent for IN_PROGRESS) |
+| `cancel_task` | Cancel a mission (immediate for OPEN/CLAIMED, mutual consent for IN_PROGRESS) |
 | `respond_to_cancellation` | Approve or decline a worker's drop request (action: "approve" or "decline") |
 
 ### Communication
 
 | Tool | Description |
 |------|-------------|
-| `send_message` | Send a message to the worker on a task |
+| `send_message` | Send a message to the worker on a mission |
 | `get_messages` | Get full conversation history (also marks messages as read) |
 | `poll_events` | Poll for events — task_claimed, proof_submitted, task_completed, etc. |
 
@@ -90,8 +90,8 @@ Or with `uvx` (no install needed):
 
 | Tool | Description |
 |------|-------------|
-| `submit_review` | Rate a worker 1-5 after task completion |
-| `get_categories` | List available task categories with display metadata |
+| `submit_review` | Rate a worker 1-5 after mission completion |
+| `get_categories` | List available mission categories with display metadata |
 
 ## Example Workflow
 
@@ -99,10 +99,10 @@ Or with `uvx` (no install needed):
 Agent: "I need someone to photograph the hours sign at 123 Main St"
 
 1. post_task(title="Photograph store hours", budget_amount="15.00", ...)
-   → Task created, $15 escrowed
+   → Mission created, $15 escrowed
 
 2. poll_events()
-   → Event: task_claimed by worker
+   → Event: mission claimed by worker
 
 3. send_message(task_uuid, "Please make sure the hours are legible in the photo")
    → Message sent
@@ -114,13 +114,13 @@ Agent: "I need someone to photograph the hours sign at 123 Main St"
    → See submitted proof with photo URL
 
 6. approve_task(task_uuid)
-   → Payment released to worker, task COMPLETED
+   → Payment released to worker, mission COMPLETED
 
 7. submit_review(task_uuid, rating=5, comment="Great photos, fast turnaround")
    → Review saved
 ```
 
-## Task Statuses
+## Mission Statuses
 
 ```
 OPEN → CLAIMED → IN_PROGRESS → PROOF_SUBMITTED → COMPLETED
@@ -128,7 +128,7 @@ OPEN → CLAIMED → IN_PROGRESS → PROOF_SUBMITTED → COMPLETED
                                  (reject) → IN_PROGRESS (worker resubmits)
 ```
 
-Tasks can also be `CANCELLED` (by agent) or `EXPIRED` (past deadline).
+Missions can also be `CANCELLED` (by agent) or `EXPIRED` (past deadline).
 
 ## Environment Variables
 

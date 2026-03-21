@@ -25,24 +25,24 @@ async def post_task(
     acceptance_contract: Optional[str] = None,
 ) -> str:
     """
-    Create a new task.
+    Create a new mission.
 
     Args:
-        title: Task title
-        description: Task description
-        lat: Latitude for task location
-        lng: Longitude for task location
+        title: Mission title
+        description: Mission description
+        lat: Latitude for mission location
+        lng: Longitude for mission location
         radius_km: Search radius in kilometers
-        deadline: Task deadline (ISO format)
+        deadline: Mission deadline (ISO format)
         budget_amount: Budget in USD
-        category: Task category (PHYSICAL_WORLD, IDENTITY_LEGAL, OFFLINE_GATED,
+        category: Mission category (PHYSICAL_WORLD, IDENTITY_LEGAL, OFFLINE_GATED,
                   EMBODIED_JUDGMENT, SOCIAL_RELATIONAL, EXPERT_CURATION, DELIVERY, DIGITAL_REMOTE)
-        template_id: Optional task template UUID
+        template_id: Optional mission template UUID
         verification_type: Proof type required (PHOTO_PROOF, VIDEO_PROOF, STRUCTURED_DATA, SIGNED_RECEIPT)
         acceptance_contract: JSON string defining acceptance criteria (required fields, min photos, GPS requirement)
 
     Returns:
-        JSON string with task details or error
+        JSON string with mission details or error
     """
     try:
         client = APIClient()
@@ -98,13 +98,13 @@ async def post_task(
 
 async def check_task_status(task_uuid: str) -> str:
     """
-    Get task details and current status.
+    Get mission details and current status.
 
     Args:
-        task_uuid: Task UUID
+        task_uuid: Mission UUID
 
     Returns:
-        JSON string with task details or error
+        JSON string with mission details or error
     """
     try:
         client = APIClient()
@@ -116,7 +116,7 @@ async def check_task_status(task_uuid: str) -> str:
         if result["status_code"] == 200:
             return json.dumps(result["data"])
         elif result["status_code"] == 404:
-            return _error_response(f"Task not found: {task_uuid}")
+            return _error_response(f"Mission not found: {task_uuid}")
         elif result["status_code"] == 401:
             return _error_response("Unauthorized: Invalid API key")
         else:
@@ -135,14 +135,14 @@ async def list_my_tasks(
     category: Optional[str] = None,
 ) -> str:
     """
-    List agent's tasks with optional filtering.
+    List agent's missions with optional filtering.
 
     Args:
         status: Filter by status (e.g., 'OPEN', 'CLAIMED', 'COMPLETED')
         category: Filter by category (e.g., 'location-based')
 
     Returns:
-        JSON string with list of tasks or error
+        JSON string with list of missions or error
     """
     try:
         client = APIClient()
@@ -175,13 +175,13 @@ async def list_my_tasks(
 
 async def approve_task(task_uuid: str) -> str:
     """
-    Approve a task proof and release payment.
+    Approve a mission proof and release payment.
 
     Args:
-        task_uuid: Task UUID
+        task_uuid: Mission UUID
 
     Returns:
-        JSON string with updated task details or error
+        JSON string with updated mission details or error
     """
     try:
         client = APIClient()
@@ -193,10 +193,10 @@ async def approve_task(task_uuid: str) -> str:
         if result["status_code"] == 200:
             return json.dumps(result["data"])
         elif result["status_code"] == 404:
-            return _error_response(f"Task not found: {task_uuid}")
+            return _error_response(f"Mission not found: {task_uuid}")
         elif result["status_code"] == 400:
             return _error_response(
-                result["data"].get("detail", "Cannot approve task in current state")
+                result["data"].get("detail", "Cannot approve mission in current state")
             )
         elif result["status_code"] == 401:
             return _error_response("Unauthorized: Invalid API key")
@@ -213,14 +213,14 @@ async def approve_task(task_uuid: str) -> str:
 
 async def reject_task(task_uuid: str, reason: str) -> str:
     """
-    Reject a task proof and return task to IN_PROGRESS.
+    Reject a mission proof and return mission to IN_PROGRESS.
 
     Args:
-        task_uuid: Task UUID
+        task_uuid: Mission UUID
         reason: Reason for rejection (max 500 chars)
 
     Returns:
-        JSON string with updated task details or error
+        JSON string with updated mission details or error
     """
     try:
         client = APIClient()
@@ -237,10 +237,10 @@ async def reject_task(task_uuid: str, reason: str) -> str:
         if result["status_code"] == 200:
             return json.dumps(result["data"])
         elif result["status_code"] == 404:
-            return _error_response(f"Task not found: {task_uuid}")
+            return _error_response(f"Mission not found: {task_uuid}")
         elif result["status_code"] == 400:
             return _error_response(
-                result["data"].get("detail", "Cannot reject task in current state")
+                result["data"].get("detail", "Cannot reject mission in current state")
             )
         elif result["status_code"] == 401:
             return _error_response("Unauthorized: Invalid API key")
@@ -257,7 +257,7 @@ async def reject_task(task_uuid: str, reason: str) -> str:
 
 async def get_templates() -> str:
     """
-    Get list of available task templates.
+    Get list of available mission templates.
 
     Templates endpoint uses AllowAny permission (no authentication required).
 
@@ -322,10 +322,10 @@ async def check_balance() -> str:
 
 async def send_message(task_uuid: str, content: str) -> str:
     """
-    Send a message to the worker on a task.
+    Send a message to the worker on a mission.
 
     Args:
-        task_uuid: Task UUID
+        task_uuid: Mission UUID
         content: Message content (max 2000 chars)
 
     Returns:
@@ -341,14 +341,14 @@ async def send_message(task_uuid: str, content: str) -> str:
             return json.dumps(result["data"])
         elif result["status_code"] == 400:
             return _error_response(
-                result["data"].get("detail", "Cannot send message on this task")
+                result["data"].get("detail", "Cannot send message on this mission")
             )
         elif result["status_code"] == 404:
-            return _error_response(f"Task not found: {task_uuid}")
+            return _error_response(f"Mission not found: {task_uuid}")
         elif result["status_code"] == 401:
             return _error_response("Unauthorized: Invalid API key")
         elif result["status_code"] == 403:
-            return _error_response("Forbidden: Not authorized to message on this task")
+            return _error_response("Forbidden: Not authorized to message on this mission")
         else:
             return _error_response(
                 f"API error (HTTP {result['status_code']}): {result['data']}"
@@ -362,12 +362,12 @@ async def send_message(task_uuid: str, content: str) -> str:
 
 async def get_messages(task_uuid: str) -> str:
     """
-    Get all messages for a task.
+    Get all messages for a mission.
 
     Fetching messages also marks unread messages from the other party as read.
 
     Args:
-        task_uuid: Task UUID
+        task_uuid: Mission UUID
 
     Returns:
         JSON string with list of messages or error
@@ -381,10 +381,10 @@ async def get_messages(task_uuid: str) -> str:
             return json.dumps(result["data"])
         elif result["status_code"] == 400:
             return _error_response(
-                result["data"].get("detail", "Cannot view messages on this task")
+                result["data"].get("detail", "Cannot view messages on this mission")
             )
         elif result["status_code"] == 404:
-            return _error_response(f"Task not found: {task_uuid}")
+            return _error_response(f"Mission not found: {task_uuid}")
         elif result["status_code"] == 401:
             return _error_response("Unauthorized: Invalid API key")
         else:
@@ -400,18 +400,18 @@ async def get_messages(task_uuid: str) -> str:
 
 async def cancel_task(task_uuid: str, reason: Optional[str] = None) -> str:
     """
-    Cancel a task.
+    Cancel a mission.
 
-    For OPEN or CLAIMED tasks, cancellation is immediate and escrow is refunded.
-    For IN_PROGRESS tasks, this requests mutual cancellation from the worker
+    For OPEN or CLAIMED missions, cancellation is immediate and escrow is refunded.
+    For IN_PROGRESS missions, this requests mutual cancellation from the worker
     (returns 202 Accepted while waiting for worker consent).
 
     Args:
-        task_uuid: Task UUID
+        task_uuid: Mission UUID
         reason: Optional reason for cancellation
 
     Returns:
-        JSON string with updated task details or error
+        JSON string with updated mission details or error
     """
     try:
         client = APIClient()
@@ -428,10 +428,10 @@ async def cancel_task(task_uuid: str, reason: Optional[str] = None) -> str:
                 data["_note"] = "Cancellation requested. Waiting for worker consent."
             return json.dumps(data)
         elif result["status_code"] == 404:
-            return _error_response(f"Task not found: {task_uuid}")
+            return _error_response(f"Mission not found: {task_uuid}")
         elif result["status_code"] == 400:
             return _error_response(
-                result["data"].get("detail", "Cannot cancel task in current state")
+                result["data"].get("detail", "Cannot cancel mission in current state")
             )
         elif result["status_code"] == 401:
             return _error_response("Unauthorized: Invalid API key")
@@ -448,7 +448,7 @@ async def cancel_task(task_uuid: str, reason: Optional[str] = None) -> str:
 
 async def poll_events(since: Optional[str] = None, limit: Optional[int] = None) -> str:
     """
-    Poll for agent events (task claimed, proof submitted, task completed, etc.).
+    Poll for agent events (mission claimed, proof submitted, mission completed, etc.).
 
     Args:
         since: ISO 8601 timestamp — only return events after this time
@@ -485,10 +485,10 @@ async def poll_events(since: Optional[str] = None, limit: Optional[int] = None) 
 
 async def submit_review(task_uuid: str, rating: int, comment: Optional[str] = None) -> str:
     """
-    Submit a review/rating for the worker after task completion.
+    Submit a review/rating for the worker after mission completion.
 
     Args:
-        task_uuid: Task UUID (must be COMPLETED)
+        task_uuid: Mission UUID (must be COMPLETED)
         rating: Rating from 1 to 5
         comment: Optional comment (max 2000 chars)
 
@@ -511,11 +511,11 @@ async def submit_review(task_uuid: str, rating: int, comment: Optional[str] = No
                 result["data"].get("detail", "Cannot submit review")
             )
         elif result["status_code"] == 404:
-            return _error_response(f"Task not found: {task_uuid}")
+            return _error_response(f"Mission not found: {task_uuid}")
         elif result["status_code"] == 401:
             return _error_response("Unauthorized: Invalid API key")
         elif result["status_code"] == 403:
-            return _error_response("Forbidden: Not authorized to review this task")
+            return _error_response("Forbidden: Not authorized to review this mission")
         else:
             return _error_response(
                 f"API error (HTTP {result['status_code']}): {result['data']}"
@@ -531,11 +531,11 @@ async def respond_to_cancellation(task_uuid: str, action: str, reason: Optional[
     """
     Approve or decline a worker's cancellation/drop request.
 
-    When a worker requests to drop a task, the agent must approve or decline.
-    Approving cancels the task and refunds escrow. Declining keeps the task active.
+    When a worker requests to drop a mission, the agent must approve or decline.
+    Approving cancels the mission and refunds escrow. Declining keeps the mission active.
 
     Args:
-        task_uuid: Task UUID
+        task_uuid: Mission UUID
         action: 'approve' or 'decline'
         reason: Optional reason (used when declining)
 
@@ -559,7 +559,7 @@ async def respond_to_cancellation(task_uuid: str, action: str, reason: Optional[
         if result["status_code"] == 200:
             return json.dumps(result["data"])
         elif result["status_code"] == 404:
-            return _error_response(f"Task not found: {task_uuid}")
+            return _error_response(f"Mission not found: {task_uuid}")
         elif result["status_code"] == 400:
             return _error_response(
                 result["data"].get("detail", f"Cannot {action} cancellation in current state")
@@ -581,9 +581,58 @@ async def respond_to_cancellation(task_uuid: str, action: str, reason: Optional[
         return _error_response(f"Unexpected error: {str(e)}")
 
 
+async def submit_feedback(
+    report_type: str,
+    title: str,
+    description: str,
+    platform: str = "mcp",
+) -> str:
+    """
+    Submit a bug report, feedback, or feature request.
+
+    Args:
+        report_type: Type of report — 'bug', 'feedback', or 'feature_request'
+        title: Short summary of the report
+        description: Detailed description
+        platform: Where the issue was encountered (defaults to 'mcp')
+
+    Returns:
+        JSON string with report details or error message
+    """
+    try:
+        client = APIClient()
+        payload = {
+            "type": report_type,
+            "title": title,
+            "description": description,
+            "platform": platform,
+        }
+
+        response = await client.post("/feedback/", data=payload)
+        result = APIClient.handle_response(response)
+
+        if result["status_code"] == 201:
+            return json.dumps(result["data"])
+        elif result["status_code"] == 401:
+            return _error_response("Unauthorized: Invalid API key")
+        elif result["status_code"] == 400:
+            return _error_response(
+                f"Validation error: {result['data']}"
+            )
+        else:
+            return _error_response(
+                f"API error (HTTP {result['status_code']}): {result['data']}"
+            )
+
+    except httpx.RequestError as e:
+        return _error_response(f"Network error: {str(e)}")
+    except Exception as e:
+        return _error_response(f"Unexpected error: {str(e)}")
+
+
 async def get_categories() -> str:
     """
-    Get list of available task categories.
+    Get list of available mission categories.
 
     Categories endpoint is public (no authentication required).
 
