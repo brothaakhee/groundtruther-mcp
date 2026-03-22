@@ -34,7 +34,7 @@ def api_base_url():
 
 
 @pytest.fixture
-def task_uuid():
+def mission_uuid():
     """Sample task UUID."""
     return "550e8400-e29b-41d4-a716-446655440000"
 
@@ -45,13 +45,13 @@ def template_uuid():
     return "550e8400-e29b-41d4-a716-446655440001"
 
 
-class TestPostTask:
-    """Tests for post_task tool."""
+class TestPostMission:
+    """Tests for post_mission tool."""
 
     @pytest.mark.asyncio
-    async def test_post_task_success(self, api_key, api_base_url, task_uuid):
+    async def test_post_task_success(self, api_key, api_base_url, mission_uuid):
         """Test successful task creation."""
-        from groundtruther_mcp.tools import post_task
+        from groundtruther_mcp.tools import post_mission
 
         request_body = {
             "title": "Find a coffee shop",
@@ -65,7 +65,7 @@ class TestPostTask:
         }
 
         response_data = {
-            "id": task_uuid,
+            "id": mission_uuid,
             "title": "Find a coffee shop",
             "description": "Find a good coffee shop near downtown",
             "status": "OPEN",
@@ -81,7 +81,7 @@ class TestPostTask:
             mock_client.post.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await post_task(
+            result = await post_mission(
                 title="Find a coffee shop",
                 description="Find a good coffee shop near downtown",
                 lat=40.7128,
@@ -101,16 +101,16 @@ class TestPostTask:
 
             # Verify response
             response = json.loads(result)
-            assert response["id"] == task_uuid
+            assert response["id"] == mission_uuid
             assert response["status"] == "OPEN"
 
     @pytest.mark.asyncio
-    async def test_post_task_with_template(self, api_key, api_base_url, task_uuid, template_uuid):
+    async def test_post_task_with_template(self, api_key, api_base_url, mission_uuid, template_uuid):
         """Test task creation with template."""
-        from groundtruther_mcp.tools import post_task
+        from groundtruther_mcp.tools import post_mission
 
         response_data = {
-            "id": task_uuid,
+            "id": mission_uuid,
             "title": "Find a coffee shop",
             "status": "OPEN",
             "template": {"id": template_uuid, "name": "Location Finding"},
@@ -124,7 +124,7 @@ class TestPostTask:
             mock_client.post.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await post_task(
+            result = await post_mission(
                 title="Find a coffee shop",
                 description="Find a good coffee shop near downtown",
                 lat=40.7128,
@@ -142,7 +142,7 @@ class TestPostTask:
     @pytest.mark.asyncio
     async def test_post_task_insufficient_funds(self, api_key, api_base_url):
         """Test task creation with insufficient funds (402 error)."""
-        from groundtruther_mcp.tools import post_task
+        from groundtruther_mcp.tools import post_mission
 
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
@@ -154,7 +154,7 @@ class TestPostTask:
             mock_client.post.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await post_task(
+            result = await post_mission(
                 title="Expensive task",
                 description="This is too expensive",
                 lat=40.7128,
@@ -172,7 +172,7 @@ class TestPostTask:
     @pytest.mark.asyncio
     async def test_post_task_invalid_request(self, api_key, api_base_url):
         """Test task creation with invalid data (400 error)."""
-        from groundtruther_mcp.tools import post_task
+        from groundtruther_mcp.tools import post_mission
 
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
@@ -184,7 +184,7 @@ class TestPostTask:
             mock_client.post.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await post_task(
+            result = await post_mission(
                 title="",
                 description="Missing title",
                 lat=40.7128,
@@ -201,7 +201,7 @@ class TestPostTask:
     @pytest.mark.asyncio
     async def test_post_task_unauthorized(self, api_key, api_base_url):
         """Test task creation with invalid API key (401 error)."""
-        from groundtruther_mcp.tools import post_task
+        from groundtruther_mcp.tools import post_mission
 
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
@@ -211,7 +211,7 @@ class TestPostTask:
             mock_client.post.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await post_task(
+            result = await post_mission(
                 title="Task",
                 description="Description",
                 lat=40.7128,
@@ -226,16 +226,16 @@ class TestPostTask:
             assert "error" in response
 
 
-class TestCheckTaskStatus:
+class TestCheckMissionStatus:
     """Tests for check_task_status tool."""
 
     @pytest.mark.asyncio
-    async def test_check_task_status_success(self, api_key, api_base_url, task_uuid):
+    async def test_check_task_status_success(self, api_key, api_base_url, mission_uuid):
         """Test successfully checking task status."""
-        from groundtruther_mcp.tools import check_task_status
+        from groundtruther_mcp.tools import check_mission_status
 
         response_data = {
-            "id": task_uuid,
+            "id": mission_uuid,
             "title": "Find a coffee shop",
             "status": "CLAIMED",
             "budget_amount": "50.00",
@@ -251,22 +251,22 @@ class TestCheckTaskStatus:
             mock_client.get.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await check_task_status(task_uuid)
+            result = await check_mission_status(mission_uuid)
 
             # Verify API call
             mock_client.get.assert_called_once()
             call_args = mock_client.get.call_args
-            assert f"/tasks/{task_uuid}/" in call_args[0][0]
+            assert f"/tasks/{mission_uuid}/" in call_args[0][0]
 
             # Verify response
             response = json.loads(result)
-            assert response["id"] == task_uuid
+            assert response["id"] == mission_uuid
             assert response["status"] == "CLAIMED"
 
     @pytest.mark.asyncio
-    async def test_check_task_status_not_found(self, api_key, api_base_url, task_uuid):
+    async def test_check_task_status_not_found(self, api_key, api_base_url, mission_uuid):
         """Test checking status of non-existent task (404 error)."""
-        from groundtruther_mcp.tools import check_task_status
+        from groundtruther_mcp.tools import check_mission_status
 
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
@@ -276,16 +276,16 @@ class TestCheckTaskStatus:
             mock_client.get.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await check_task_status(task_uuid)
+            result = await check_mission_status(mission_uuid)
 
             response = json.loads(result)
             assert "error" in response
             assert "not found" in response["error"].lower()
 
     @pytest.mark.asyncio
-    async def test_check_task_status_unauthorized(self, api_key, api_base_url, task_uuid):
+    async def test_check_task_status_unauthorized(self, api_key, api_base_url, mission_uuid):
         """Test checking task status with invalid API key."""
-        from groundtruther_mcp.tools import check_task_status
+        from groundtruther_mcp.tools import check_mission_status
 
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
@@ -295,24 +295,24 @@ class TestCheckTaskStatus:
             mock_client.get.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await check_task_status(task_uuid)
+            result = await check_mission_status(mission_uuid)
 
             response = json.loads(result)
             assert "error" in response
 
 
-class TestListMyTasks:
-    """Tests for list_my_tasks tool."""
+class TestListMyMissions:
+    """Tests for list_my_missions tool."""
 
     @pytest.mark.asyncio
-    async def test_list_my_tasks_success(self, api_key, api_base_url, task_uuid):
+    async def test_list_my_tasks_success(self, api_key, api_base_url, mission_uuid):
         """Test successfully listing agent's tasks."""
-        from groundtruther_mcp.tools import list_my_tasks
+        from groundtruther_mcp.tools import list_my_missions
 
         response_data = {
             "results": [
                 {
-                    "id": task_uuid,
+                    "id": mission_uuid,
                     "title": "Find a coffee shop",
                     "status": "OPEN",
                     "budget_amount": "50.00",
@@ -336,7 +336,7 @@ class TestListMyTasks:
             mock_client.get.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await list_my_tasks()
+            result = await list_my_missions()
 
             # Verify API call
             mock_client.get.assert_called_once()
@@ -349,14 +349,14 @@ class TestListMyTasks:
             assert response["results"][0]["status"] == "OPEN"
 
     @pytest.mark.asyncio
-    async def test_list_my_tasks_with_filters(self, api_key, api_base_url, task_uuid):
+    async def test_list_my_tasks_with_filters(self, api_key, api_base_url, mission_uuid):
         """Test listing tasks with status and category filters."""
-        from groundtruther_mcp.tools import list_my_tasks
+        from groundtruther_mcp.tools import list_my_missions
 
         response_data = {
             "results": [
                 {
-                    "id": task_uuid,
+                    "id": mission_uuid,
                     "title": "Find a coffee shop",
                     "status": "OPEN",
                     "category": "location-based",
@@ -374,7 +374,7 @@ class TestListMyTasks:
             mock_client.get.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await list_my_tasks(status="OPEN", category="location-based")
+            result = await list_my_missions(status="OPEN", category="location-based")
 
             # Verify query parameters were included
             call_args = mock_client.get.call_args
@@ -386,7 +386,7 @@ class TestListMyTasks:
     @pytest.mark.asyncio
     async def test_list_my_tasks_empty(self, api_key, api_base_url):
         """Test listing tasks when agent has none."""
-        from groundtruther_mcp.tools import list_my_tasks
+        from groundtruther_mcp.tools import list_my_missions
 
         response_data = {"results": []}
 
@@ -398,7 +398,7 @@ class TestListMyTasks:
             mock_client.get.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await list_my_tasks()
+            result = await list_my_missions()
 
             response = json.loads(result)
             assert response["results"] == []
@@ -406,7 +406,7 @@ class TestListMyTasks:
     @pytest.mark.asyncio
     async def test_list_my_tasks_unauthorized(self, api_key, api_base_url):
         """Test listing tasks with invalid API key."""
-        from groundtruther_mcp.tools import list_my_tasks
+        from groundtruther_mcp.tools import list_my_missions
 
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
@@ -416,22 +416,22 @@ class TestListMyTasks:
             mock_client.get.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await list_my_tasks()
+            result = await list_my_missions()
 
             response = json.loads(result)
             assert "error" in response
 
 
-class TestApproveTask:
-    """Tests for approve_task tool."""
+class TestApproveMission:
+    """Tests for approve_mission tool."""
 
     @pytest.mark.asyncio
-    async def test_approve_task_success(self, api_key, api_base_url, task_uuid):
+    async def test_approve_task_success(self, api_key, api_base_url, mission_uuid):
         """Test successfully approving a task."""
-        from groundtruther_mcp.tools import approve_task
+        from groundtruther_mcp.tools import approve_mission
 
         response_data = {
-            "id": task_uuid,
+            "id": mission_uuid,
             "title": "Find a coffee shop",
             "status": "COMPLETED",
             "budget_amount": "50.00",
@@ -446,22 +446,22 @@ class TestApproveTask:
             mock_client.post.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await approve_task(task_uuid)
+            result = await approve_mission(mission_uuid)
 
             # Verify API call
             mock_client.post.assert_called_once()
             call_args = mock_client.post.call_args
-            assert f"/tasks/{task_uuid}/approve/" in call_args[0][0]
+            assert f"/tasks/{mission_uuid}/approve/" in call_args[0][0]
 
             # Verify response
             response = json.loads(result)
-            assert response["id"] == task_uuid
+            assert response["id"] == mission_uuid
             assert response["status"] == "COMPLETED"
 
     @pytest.mark.asyncio
-    async def test_approve_task_not_found(self, api_key, api_base_url, task_uuid):
+    async def test_approve_task_not_found(self, api_key, api_base_url, mission_uuid):
         """Test approving non-existent task."""
-        from groundtruther_mcp.tools import approve_task
+        from groundtruther_mcp.tools import approve_mission
 
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
@@ -471,15 +471,15 @@ class TestApproveTask:
             mock_client.post.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await approve_task(task_uuid)
+            result = await approve_mission(mission_uuid)
 
             response = json.loads(result)
             assert "error" in response
 
     @pytest.mark.asyncio
-    async def test_approve_task_invalid_state(self, api_key, api_base_url, task_uuid):
+    async def test_approve_task_invalid_state(self, api_key, api_base_url, mission_uuid):
         """Test approving task in invalid state (400 error)."""
-        from groundtruther_mcp.tools import approve_task
+        from groundtruther_mcp.tools import approve_mission
 
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
@@ -491,15 +491,15 @@ class TestApproveTask:
             mock_client.post.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await approve_task(task_uuid)
+            result = await approve_mission(mission_uuid)
 
             response = json.loads(result)
             assert "error" in response
 
     @pytest.mark.asyncio
-    async def test_approve_task_unauthorized(self, api_key, api_base_url, task_uuid):
+    async def test_approve_task_unauthorized(self, api_key, api_base_url, mission_uuid):
         """Test approving task with invalid API key."""
-        from groundtruther_mcp.tools import approve_task
+        from groundtruther_mcp.tools import approve_mission
 
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
@@ -509,22 +509,22 @@ class TestApproveTask:
             mock_client.post.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await approve_task(task_uuid)
+            result = await approve_mission(mission_uuid)
 
             response = json.loads(result)
             assert "error" in response
 
 
-class TestRejectTask:
-    """Tests for reject_task tool."""
+class TestRejectMission:
+    """Tests for reject_mission tool."""
 
     @pytest.mark.asyncio
-    async def test_reject_task_success(self, api_key, api_base_url, task_uuid):
+    async def test_reject_task_success(self, api_key, api_base_url, mission_uuid):
         """Test successfully rejecting a task."""
-        from groundtruther_mcp.tools import reject_task
+        from groundtruther_mcp.tools import reject_mission
 
         response_data = {
-            "id": task_uuid,
+            "id": mission_uuid,
             "title": "Find a coffee shop",
             "status": "IN_PROGRESS",
             "budget_amount": "50.00",
@@ -538,24 +538,24 @@ class TestRejectTask:
             mock_client.post.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await reject_task(task_uuid, "Image quality is poor")
+            result = await reject_mission(mission_uuid, "Image quality is poor")
 
             # Verify API call
             mock_client.post.assert_called_once()
             call_args = mock_client.post.call_args
-            assert f"/tasks/{task_uuid}/reject/" in call_args[0][0]
+            assert f"/tasks/{mission_uuid}/reject/" in call_args[0][0]
             # Verify reason was sent in body
             assert call_args[1]["json"]["reason"] == "Image quality is poor"
 
             # Verify response
             response = json.loads(result)
-            assert response["id"] == task_uuid
+            assert response["id"] == mission_uuid
             assert response["status"] == "IN_PROGRESS"
 
     @pytest.mark.asyncio
-    async def test_reject_task_not_found(self, api_key, api_base_url, task_uuid):
+    async def test_reject_task_not_found(self, api_key, api_base_url, mission_uuid):
         """Test rejecting non-existent task."""
-        from groundtruther_mcp.tools import reject_task
+        from groundtruther_mcp.tools import reject_mission
 
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
@@ -565,15 +565,15 @@ class TestRejectTask:
             mock_client.post.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await reject_task(task_uuid, "Invalid proof")
+            result = await reject_mission(mission_uuid, "Invalid proof")
 
             response = json.loads(result)
             assert "error" in response
 
     @pytest.mark.asyncio
-    async def test_reject_task_invalid_state(self, api_key, api_base_url, task_uuid):
+    async def test_reject_task_invalid_state(self, api_key, api_base_url, mission_uuid):
         """Test rejecting task in invalid state."""
-        from groundtruther_mcp.tools import reject_task
+        from groundtruther_mcp.tools import reject_mission
 
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
@@ -585,15 +585,15 @@ class TestRejectTask:
             mock_client.post.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await reject_task(task_uuid, "Invalid proof")
+            result = await reject_mission(mission_uuid, "Invalid proof")
 
             response = json.loads(result)
             assert "error" in response
 
     @pytest.mark.asyncio
-    async def test_reject_task_unauthorized(self, api_key, api_base_url, task_uuid):
+    async def test_reject_task_unauthorized(self, api_key, api_base_url, mission_uuid):
         """Test rejecting task with invalid API key."""
-        from groundtruther_mcp.tools import reject_task
+        from groundtruther_mcp.tools import reject_mission
 
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
@@ -603,7 +603,7 @@ class TestRejectTask:
             mock_client.post.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await reject_task(task_uuid, "Invalid proof")
+            result = await reject_mission(mission_uuid, "Invalid proof")
 
             response = json.loads(result)
             assert "error" in response
@@ -801,13 +801,13 @@ class TestSendMessage:
     """Tests for send_message tool."""
 
     @pytest.mark.asyncio
-    async def test_send_message_success(self, api_key, api_base_url, task_uuid):
+    async def test_send_message_success(self, api_key, api_base_url, mission_uuid):
         """Test successfully sending a message."""
         from groundtruther_mcp.tools import send_message
 
         response_data = {
             "id": "msg-uuid",
-            "task_id": task_uuid,
+            "task_id": mission_uuid,
             "sender_type": "agent",
             "content": "Please include the sign in your photo",
             "attachments": [],
@@ -822,18 +822,18 @@ class TestSendMessage:
             mock_client.post.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await send_message(task_uuid, "Please include the sign in your photo")
+            result = await send_message(mission_uuid, "Please include the sign in your photo")
 
             mock_client.post.assert_called_once()
             call_args = mock_client.post.call_args
-            assert f"/tasks/{task_uuid}/messages/" in call_args[0][0]
+            assert f"/tasks/{mission_uuid}/messages/" in call_args[0][0]
             assert call_args[1]["json"]["content"] == "Please include the sign in your photo"
 
             response = json.loads(result)
             assert response["sender_type"] == "agent"
 
     @pytest.mark.asyncio
-    async def test_send_message_task_completed(self, api_key, api_base_url, task_uuid):
+    async def test_send_message_task_completed(self, api_key, api_base_url, mission_uuid):
         """Test sending message on completed task (400 error)."""
         from groundtruther_mcp.tools import send_message
 
@@ -847,13 +847,13 @@ class TestSendMessage:
             mock_client.post.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await send_message(task_uuid, "Thanks!")
+            result = await send_message(mission_uuid, "Thanks!")
 
             response = json.loads(result)
             assert "error" in response
 
     @pytest.mark.asyncio
-    async def test_send_message_unauthorized(self, api_key, api_base_url, task_uuid):
+    async def test_send_message_unauthorized(self, api_key, api_base_url, mission_uuid):
         """Test sending message with invalid API key."""
         from groundtruther_mcp.tools import send_message
 
@@ -865,7 +865,7 @@ class TestSendMessage:
             mock_client.post.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await send_message(task_uuid, "Hello")
+            result = await send_message(mission_uuid, "Hello")
 
             response = json.loads(result)
             assert "error" in response
@@ -875,7 +875,7 @@ class TestGetMessages:
     """Tests for get_messages tool."""
 
     @pytest.mark.asyncio
-    async def test_get_messages_success(self, api_key, api_base_url, task_uuid):
+    async def test_get_messages_success(self, api_key, api_base_url, mission_uuid):
         """Test successfully getting messages."""
         from groundtruther_mcp.tools import get_messages
 
@@ -904,14 +904,14 @@ class TestGetMessages:
             mock_client.get.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await get_messages(task_uuid)
+            result = await get_messages(mission_uuid)
 
             mock_client.get.assert_called_once()
             response = json.loads(result)
             assert len(response["results"]) == 2
 
     @pytest.mark.asyncio
-    async def test_get_messages_empty(self, api_key, api_base_url, task_uuid):
+    async def test_get_messages_empty(self, api_key, api_base_url, mission_uuid):
         """Test getting messages when none exist."""
         from groundtruther_mcp.tools import get_messages
 
@@ -923,13 +923,13 @@ class TestGetMessages:
             mock_client.get.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await get_messages(task_uuid)
+            result = await get_messages(mission_uuid)
 
             response = json.loads(result)
             assert response["results"] == []
 
     @pytest.mark.asyncio
-    async def test_get_messages_unauthorized(self, api_key, api_base_url, task_uuid):
+    async def test_get_messages_unauthorized(self, api_key, api_base_url, mission_uuid):
         """Test getting messages with invalid API key."""
         from groundtruther_mcp.tools import get_messages
 
@@ -941,22 +941,22 @@ class TestGetMessages:
             mock_client.get.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await get_messages(task_uuid)
+            result = await get_messages(mission_uuid)
 
             response = json.loads(result)
             assert "error" in response
 
 
-class TestCancelTask:
-    """Tests for cancel_task tool."""
+class TestCancelMission:
+    """Tests for cancel_mission tool."""
 
     @pytest.mark.asyncio
-    async def test_cancel_open_task(self, api_key, api_base_url, task_uuid):
+    async def test_cancel_open_task(self, api_key, api_base_url, mission_uuid):
         """Test cancelling an OPEN task (immediate)."""
-        from groundtruther_mcp.tools import cancel_task
+        from groundtruther_mcp.tools import cancel_mission
 
         response_data = {
-            "id": task_uuid,
+            "id": mission_uuid,
             "status": "CANCELLED",
         }
 
@@ -968,19 +968,19 @@ class TestCancelTask:
             mock_client.post.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await cancel_task(task_uuid, "No longer needed")
+            result = await cancel_mission(mission_uuid, "No longer needed")
 
             mock_client.post.assert_called_once()
             response = json.loads(result)
             assert response["status"] == "CANCELLED"
 
     @pytest.mark.asyncio
-    async def test_cancel_in_progress_mutual(self, api_key, api_base_url, task_uuid):
+    async def test_cancel_in_progress_mutual(self, api_key, api_base_url, mission_uuid):
         """Test cancelling IN_PROGRESS task (mutual consent, 202)."""
-        from groundtruther_mcp.tools import cancel_task
+        from groundtruther_mcp.tools import cancel_mission
 
         response_data = {
-            "id": task_uuid,
+            "id": mission_uuid,
             "status": "IN_PROGRESS",
             "cancellation_requested_by": "agent",
         }
@@ -993,16 +993,16 @@ class TestCancelTask:
             mock_client.post.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await cancel_task(task_uuid, "Budget cut")
+            result = await cancel_mission(mission_uuid, "Budget cut")
 
             response = json.loads(result)
             assert "_note" in response
             assert "Waiting for worker consent" in response["_note"]
 
     @pytest.mark.asyncio
-    async def test_cancel_task_invalid_state(self, api_key, api_base_url, task_uuid):
+    async def test_cancel_task_invalid_state(self, api_key, api_base_url, mission_uuid):
         """Test cancelling a COMPLETED task (400 error)."""
-        from groundtruther_mcp.tools import cancel_task
+        from groundtruther_mcp.tools import cancel_mission
 
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
@@ -1012,15 +1012,15 @@ class TestCancelTask:
             mock_client.post.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await cancel_task(task_uuid)
+            result = await cancel_mission(mission_uuid)
 
             response = json.loads(result)
             assert "error" in response
 
     @pytest.mark.asyncio
-    async def test_cancel_task_unauthorized(self, api_key, api_base_url, task_uuid):
+    async def test_cancel_task_unauthorized(self, api_key, api_base_url, mission_uuid):
         """Test cancelling task with invalid API key."""
-        from groundtruther_mcp.tools import cancel_task
+        from groundtruther_mcp.tools import cancel_mission
 
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
@@ -1030,7 +1030,7 @@ class TestCancelTask:
             mock_client.post.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await cancel_task(task_uuid)
+            result = await cancel_mission(mission_uuid)
 
             response = json.loads(result)
             assert "error" in response
@@ -1118,13 +1118,13 @@ class TestSubmitReview:
     """Tests for submit_review tool."""
 
     @pytest.mark.asyncio
-    async def test_submit_review_success(self, api_key, api_base_url, task_uuid):
+    async def test_submit_review_success(self, api_key, api_base_url, mission_uuid):
         """Test successfully submitting a review."""
         from groundtruther_mcp.tools import submit_review
 
         response_data = {
             "id": "review-uuid",
-            "task": task_uuid,
+            "task": mission_uuid,
             "reviewer_type": "agent",
             "rating": 5,
             "comment": "Excellent work",
@@ -1139,29 +1139,29 @@ class TestSubmitReview:
             mock_client.post.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await submit_review(task_uuid, 5, "Excellent work")
+            result = await submit_review(mission_uuid, 5, "Excellent work")
 
             mock_client.post.assert_called_once()
             call_args = mock_client.post.call_args
-            assert f"/tasks/{task_uuid}/review/" in call_args[0][0]
+            assert f"/tasks/{mission_uuid}/review/" in call_args[0][0]
             assert call_args[1]["json"]["rating"] == 5
 
             response = json.loads(result)
             assert response["rating"] == 5
 
     @pytest.mark.asyncio
-    async def test_submit_review_invalid_rating(self, api_key, api_base_url, task_uuid):
+    async def test_submit_review_invalid_rating(self, api_key, api_base_url, mission_uuid):
         """Test submitting review with invalid rating."""
         from groundtruther_mcp.tools import submit_review
 
-        result = await submit_review(task_uuid, 6)
+        result = await submit_review(mission_uuid, 6)
 
         response = json.loads(result)
         assert "error" in response
         assert "between 1 and 5" in response["error"]
 
     @pytest.mark.asyncio
-    async def test_submit_review_duplicate(self, api_key, api_base_url, task_uuid):
+    async def test_submit_review_duplicate(self, api_key, api_base_url, mission_uuid):
         """Test submitting duplicate review (400 error)."""
         from groundtruther_mcp.tools import submit_review
 
@@ -1175,13 +1175,13 @@ class TestSubmitReview:
             mock_client.post.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await submit_review(task_uuid, 4)
+            result = await submit_review(mission_uuid, 4)
 
             response = json.loads(result)
             assert "error" in response
 
     @pytest.mark.asyncio
-    async def test_submit_review_not_completed(self, api_key, api_base_url, task_uuid):
+    async def test_submit_review_not_completed(self, api_key, api_base_url, mission_uuid):
         """Test submitting review on non-completed task."""
         from groundtruther_mcp.tools import submit_review
 
@@ -1195,13 +1195,13 @@ class TestSubmitReview:
             mock_client.post.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await submit_review(task_uuid, 3)
+            result = await submit_review(mission_uuid, 3)
 
             response = json.loads(result)
             assert "error" in response
 
     @pytest.mark.asyncio
-    async def test_submit_review_unauthorized(self, api_key, api_base_url, task_uuid):
+    async def test_submit_review_unauthorized(self, api_key, api_base_url, mission_uuid):
         """Test submitting review with invalid API key."""
         from groundtruther_mcp.tools import submit_review
 
@@ -1213,7 +1213,7 @@ class TestSubmitReview:
             mock_client.post.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await submit_review(task_uuid, 4)
+            result = await submit_review(mission_uuid, 4)
 
             response = json.loads(result)
             assert "error" in response
@@ -1223,12 +1223,12 @@ class TestRespondToCancellation:
     """Tests for respond_to_cancellation tool."""
 
     @pytest.mark.asyncio
-    async def test_approve_cancellation_success(self, api_key, api_base_url, task_uuid):
+    async def test_approve_cancellation_success(self, api_key, api_base_url, mission_uuid):
         """Test approving a worker's cancellation request."""
         from groundtruther_mcp.tools import respond_to_cancellation
 
         response_data = {
-            "id": task_uuid,
+            "id": mission_uuid,
             "status": "CANCELLED",
             "cancellation_requested_by": "worker",
         }
@@ -1241,22 +1241,22 @@ class TestRespondToCancellation:
             mock_client.post.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await respond_to_cancellation(task_uuid, "approve")
+            result = await respond_to_cancellation(mission_uuid, "approve")
 
             mock_client.post.assert_called_once()
             call_args = mock_client.post.call_args
-            assert f"/tasks/{task_uuid}/cancel/approve/" in call_args[0][0]
+            assert f"/tasks/{mission_uuid}/cancel/approve/" in call_args[0][0]
 
             response = json.loads(result)
             assert response["status"] == "CANCELLED"
 
     @pytest.mark.asyncio
-    async def test_decline_cancellation_success(self, api_key, api_base_url, task_uuid):
+    async def test_decline_cancellation_success(self, api_key, api_base_url, mission_uuid):
         """Test declining a worker's cancellation request."""
         from groundtruther_mcp.tools import respond_to_cancellation
 
         response_data = {
-            "id": task_uuid,
+            "id": mission_uuid,
             "status": "IN_PROGRESS",
             "cancellation_requested_by": None,
         }
@@ -1269,29 +1269,29 @@ class TestRespondToCancellation:
             mock_client.post.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await respond_to_cancellation(task_uuid, "decline", "Worker must complete")
+            result = await respond_to_cancellation(mission_uuid, "decline", "Worker must complete")
 
             mock_client.post.assert_called_once()
             call_args = mock_client.post.call_args
-            assert f"/tasks/{task_uuid}/cancel/decline/" in call_args[0][0]
+            assert f"/tasks/{mission_uuid}/cancel/decline/" in call_args[0][0]
             assert call_args[1]["json"]["reason"] == "Worker must complete"
 
             response = json.loads(result)
             assert response["status"] == "IN_PROGRESS"
 
     @pytest.mark.asyncio
-    async def test_invalid_action(self, api_key, api_base_url, task_uuid):
+    async def test_invalid_action(self, api_key, api_base_url, mission_uuid):
         """Test with invalid action value."""
         from groundtruther_mcp.tools import respond_to_cancellation
 
-        result = await respond_to_cancellation(task_uuid, "reject")
+        result = await respond_to_cancellation(mission_uuid, "reject")
 
         response = json.loads(result)
         assert "error" in response
         assert "approve" in response["error"]
 
     @pytest.mark.asyncio
-    async def test_no_pending_cancellation(self, api_key, api_base_url, task_uuid):
+    async def test_no_pending_cancellation(self, api_key, api_base_url, mission_uuid):
         """Test responding when no cancellation is pending."""
         from groundtruther_mcp.tools import respond_to_cancellation
 
@@ -1305,13 +1305,13 @@ class TestRespondToCancellation:
             mock_client.post.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await respond_to_cancellation(task_uuid, "approve")
+            result = await respond_to_cancellation(mission_uuid, "approve")
 
             response = json.loads(result)
             assert "error" in response
 
     @pytest.mark.asyncio
-    async def test_unauthorized(self, api_key, api_base_url, task_uuid):
+    async def test_unauthorized(self, api_key, api_base_url, mission_uuid):
         """Test with invalid API key."""
         from groundtruther_mcp.tools import respond_to_cancellation
 
@@ -1323,7 +1323,7 @@ class TestRespondToCancellation:
             mock_client.post.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await respond_to_cancellation(task_uuid, "approve")
+            result = await respond_to_cancellation(mission_uuid, "approve")
 
             response = json.loads(result)
             assert "error" in response
@@ -1380,15 +1380,15 @@ class TestGetCategories:
             assert "error" in response
 
 
-class TestPostTaskExtended:
-    """Tests for post_task tool with new parameters."""
+class TestPostMissionExtended:
+    """Tests for post_mission tool with new parameters."""
 
     @pytest.mark.asyncio
-    async def test_post_task_with_verification_type(self, api_key, api_base_url, task_uuid):
+    async def test_post_task_with_verification_type(self, api_key, api_base_url, mission_uuid):
         """Test task creation with verification_type."""
-        from groundtruther_mcp.tools import post_task
+        from groundtruther_mcp.tools import post_mission
 
-        response_data = {"id": task_uuid, "status": "OPEN", "verification_type": "STRUCTURED_DATA"}
+        response_data = {"id": mission_uuid, "status": "OPEN", "verification_type": "STRUCTURED_DATA"}
 
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
@@ -1398,7 +1398,7 @@ class TestPostTaskExtended:
             mock_client.post.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await post_task(
+            result = await post_mission(
                 title="Survey",
                 description="Fill out survey",
                 lat=40.7128,
@@ -1418,9 +1418,9 @@ class TestPostTaskExtended:
             assert response["verification_type"] == "STRUCTURED_DATA"
 
     @pytest.mark.asyncio
-    async def test_post_task_with_acceptance_contract(self, api_key, api_base_url, task_uuid):
+    async def test_post_task_with_acceptance_contract(self, api_key, api_base_url, mission_uuid):
         """Test task creation with acceptance_contract JSON."""
-        from groundtruther_mcp.tools import post_task
+        from groundtruther_mcp.tools import post_mission
 
         contract = json.dumps({
             "required_fields": [{"name": "store_name", "type": "text", "label": "Store Name"}],
@@ -1428,7 +1428,7 @@ class TestPostTaskExtended:
             "require_gps": True,
         })
 
-        response_data = {"id": task_uuid, "status": "OPEN"}
+        response_data = {"id": mission_uuid, "status": "OPEN"}
 
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
@@ -1438,7 +1438,7 @@ class TestPostTaskExtended:
             mock_client.post.return_value = mock_response
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
-            result = await post_task(
+            result = await post_mission(
                 title="Store check",
                 description="Check store details",
                 lat=40.7128,
@@ -1458,9 +1458,9 @@ class TestPostTaskExtended:
     @pytest.mark.asyncio
     async def test_post_task_with_invalid_contract_json(self, api_key, api_base_url):
         """Test task creation with invalid acceptance_contract JSON."""
-        from groundtruther_mcp.tools import post_task
+        from groundtruther_mcp.tools import post_mission
 
-        result = await post_task(
+        result = await post_mission(
             title="Test",
             description="Test",
             lat=40.7128,

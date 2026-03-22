@@ -88,7 +88,7 @@ def _get_field_names(schema):
 
 TOOL_CONTRACTS = [
     {
-        "tool": "post_task",
+        "tool": "post_mission",
         "path": "/api/v1/tasks/",
         "method": "post",
         "requires_api_key": True,
@@ -96,28 +96,28 @@ TOOL_CONTRACTS = [
         "tag": "agent",
     },
     {
-        "tool": "check_task_status",
+        "tool": "check_mission_status",
         "path": "/api/v1/tasks/{id}/",
         "method": "get",
         "requires_api_key": True,
         "tag": "agent",
     },
     {
-        "tool": "list_my_tasks",
+        "tool": "list_my_missions",
         "path": "/api/v1/tasks/",
         "method": "get",
         "requires_api_key": True,
         "tag": "agent",
     },
     {
-        "tool": "approve_task",
+        "tool": "approve_mission",
         "path": "/api/v1/tasks/{id}/approve/",
         "method": "post",
         "requires_api_key": True,
         "tag": "agent",
     },
     {
-        "tool": "reject_task",
+        "tool": "reject_mission",
         "path": "/api/v1/tasks/{id}/reject/",
         "method": "post",
         "requires_api_key": True,
@@ -125,7 +125,7 @@ TOOL_CONTRACTS = [
         "tag": "agent",
     },
     {
-        "tool": "cancel_task",
+        "tool": "cancel_mission",
         "path": "/api/v1/tasks/{id}/cancel/",
         "method": "post",
         "requires_api_key": True,
@@ -312,7 +312,7 @@ class TestAgentEndpointCompleteness:
             "GET /api/v1/webhooks/",  # Webhook management is optional for agents
             "POST /api/v1/webhooks/",
             "DELETE /api/v1/webhooks/{id}/",
-            "POST /api/v1/tasks/{id}/drop/",  # Worker-primary; agents use cancel_task instead
+            "POST /api/v1/tasks/{id}/drop/",  # Worker-primary; agents use cancel_mission instead
         }
 
         unexpected = [e for e in uncovered if e not in known_exceptions]

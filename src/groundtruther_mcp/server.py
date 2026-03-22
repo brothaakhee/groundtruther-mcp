@@ -4,16 +4,16 @@ import sys
 from mcp.server.fastmcp import FastMCP
 from .config import Config
 from .tools import (
-    post_task,
-    check_task_status,
-    list_my_tasks,
-    approve_task,
-    reject_task,
+    post_mission,
+    check_mission_status,
+    list_my_missions,
+    approve_mission,
+    reject_mission,
     get_templates,
     check_balance,
     send_message,
     get_messages,
-    cancel_task,
+    cancel_mission,
     poll_events,
     submit_review,
     respond_to_cancellation,
@@ -35,8 +35,8 @@ def main():
     mcp = FastMCP("groundtruther", description="Hire humans to complete real-world missions — verify locations, collect data, take photos, and more.")
 
     # Register tools
-    @mcp.tool()
-    async def post_task_tool(
+    @mcp.tool(name="post_mission")
+    async def post_mission_tool(
         title: str,
         description: str,
         lat: float,
@@ -78,7 +78,7 @@ def main():
             On 402 Payment Required, returns balance/limit error.
             On 401 Unauthorized, returns authentication error.
         """
-        return await post_task(
+        return await post_mission(
             title=title,
             description=description,
             lat=lat,
@@ -92,8 +92,8 @@ def main():
             acceptance_contract=acceptance_contract,
         )
 
-    @mcp.tool()
-    async def check_task_status_tool(task_uuid: str) -> str:
+    @mcp.tool(name="check_mission_status")
+    async def check_mission_status_tool(mission_uuid: str) -> str:
         """
         Check the current status of a mission.
 
@@ -101,16 +101,16 @@ def main():
         budget, and other metadata.
 
         Args:
-            task_uuid: Mission UUID to check
+            mission_uuid: Mission UUID to check
 
         Returns:
             JSON string with full mission details or error message.
             Mission statuses: OPEN, CLAIMED, IN_PROGRESS, PROOF_SUBMITTED, COMPLETED, CANCELLED.
         """
-        return await check_task_status(task_uuid)
+        return await check_mission_status(mission_uuid)
 
-    @mcp.tool()
-    async def list_my_tasks_tool(
+    @mcp.tool(name="list_my_missions")
+    async def list_my_missions_tool(
         status: str | None = None,
         category: str | None = None,
     ) -> str:
@@ -127,10 +127,10 @@ def main():
             JSON string with list of missions or error message.
             Each mission includes UUID, title, status, budget, and creation date.
         """
-        return await list_my_tasks(status=status, category=category)
+        return await list_my_missions(status=status, category=category)
 
-    @mcp.tool()
-    async def approve_task_tool(task_uuid: str) -> str:
+    @mcp.tool(name="approve_mission")
+    async def approve_mission_tool(mission_uuid: str) -> str:
         """
         Approve a mission proof and release payment to worker.
 
@@ -140,17 +140,17 @@ def main():
         3. Finalize the transaction
 
         Args:
-            task_uuid: Mission UUID to approve
+            mission_uuid: Mission UUID to approve
 
         Returns:
             JSON string with updated mission details or error message.
             Mission status will be COMPLETED on success.
             Returns 400 if mission is not in PROOF_SUBMITTED status.
         """
-        return await approve_task(task_uuid)
+        return await approve_mission(mission_uuid)
 
-    @mcp.tool()
-    async def reject_task_tool(task_uuid: str, reason: str) -> str:
+    @mcp.tool(name="reject_mission")
+    async def reject_mission_tool(mission_uuid: str, reason: str) -> str:
         """
         Reject a mission proof and request redo from worker.
 
@@ -160,7 +160,7 @@ def main():
         3. Allow the worker to resubmit better proof
 
         Args:
-            task_uuid: Mission UUID to reject
+            mission_uuid: Mission UUID to reject
             reason: Reason for rejection (max 500 characters)
                    e.g., "Image quality is poor" or "Wrong location"
 
@@ -169,9 +169,9 @@ def main():
             Mission status will be IN_PROGRESS on success.
             Returns 400 if mission is not in PROOF_SUBMITTED status.
         """
-        return await reject_task(task_uuid, reason)
+        return await reject_mission(mission_uuid, reason)
 
-    @mcp.tool()
+    @mcp.tool(name="get_templates")
     async def get_templates_tool() -> str:
         """
         Get list of available mission templates.
@@ -185,7 +185,7 @@ def main():
         """
         return await get_templates()
 
-    @mcp.tool()
+    @mcp.tool(name="check_balance")
     async def check_balance_tool() -> str:
         """
         Check agent owner's wallet balance.
@@ -202,8 +202,8 @@ def main():
         """
         return await check_balance()
 
-    @mcp.tool()
-    async def send_message_tool(task_uuid: str, content: str) -> str:
+    @mcp.tool(name="send_message")
+    async def send_message_tool(mission_uuid: str, content: str) -> str:
         """
         Send a message to the worker on a mission.
 
@@ -211,17 +211,17 @@ def main():
         instructions, ask for clarification, or give feedback.
 
         Args:
-            task_uuid: Mission UUID
+            mission_uuid: Mission UUID
             content: Message content (max 2000 characters)
 
         Returns:
             JSON string with message details or error message.
             Messages can only be sent on CLAIMED, IN_PROGRESS, or PROOF_SUBMITTED missions.
         """
-        return await send_message(task_uuid, content)
+        return await send_message(mission_uuid, content)
 
-    @mcp.tool()
-    async def get_messages_tool(task_uuid: str) -> str:
+    @mcp.tool(name="get_messages")
+    async def get_messages_tool(mission_uuid: str) -> str:
         """
         Get all messages for a mission.
 
@@ -229,16 +229,16 @@ def main():
         Fetching messages also marks unread messages from the worker as read.
 
         Args:
-            task_uuid: Mission UUID
+            mission_uuid: Mission UUID
 
         Returns:
             JSON string with list of messages. Each message includes sender_type
             ('agent' or 'worker'), content, and timestamp.
         """
-        return await get_messages(task_uuid)
+        return await get_messages(mission_uuid)
 
-    @mcp.tool()
-    async def cancel_task_tool(task_uuid: str, reason: str | None = None) -> str:
+    @mcp.tool(name="cancel_mission")
+    async def cancel_mission_tool(mission_uuid: str, reason: str | None = None) -> str:
         """
         Cancel a mission.
 
@@ -250,16 +250,16 @@ def main():
         A 202 response means the request is pending worker approval.
 
         Args:
-            task_uuid: Mission UUID to cancel
+            mission_uuid: Mission UUID to cancel
             reason: Optional reason for cancellation
 
         Returns:
             JSON string with updated mission details or error message.
             Status 200 = immediate cancellation. Status 202 = pending consent.
         """
-        return await cancel_task(task_uuid, reason)
+        return await cancel_mission(mission_uuid, reason)
 
-    @mcp.tool()
+    @mcp.tool(name="poll_events")
     async def poll_events_tool(since: str | None = None, limit: int | None = None) -> str:
         """
         Poll for agent events.
@@ -280,8 +280,8 @@ def main():
         """
         return await poll_events(since, limit)
 
-    @mcp.tool()
-    async def submit_review_tool(task_uuid: str, rating: int, comment: str | None = None) -> str:
+    @mcp.tool(name="submit_review")
+    async def submit_review_tool(mission_uuid: str, rating: int, comment: str | None = None) -> str:
         """
         Submit a review/rating for the worker after mission completion.
 
@@ -289,7 +289,7 @@ def main():
         the worker's reputation score on the platform.
 
         Args:
-            task_uuid: UUID of the completed mission
+            mission_uuid: UUID of the completed mission
             rating: Rating from 1 (poor) to 5 (excellent)
             comment: Optional comment about the worker's performance (max 2000 chars)
 
@@ -297,11 +297,11 @@ def main():
             JSON string with review details or error message.
             Mission must be in COMPLETED status. Only one review per reviewer per mission.
         """
-        return await submit_review(task_uuid, rating, comment)
+        return await submit_review(mission_uuid, rating, comment)
 
-    @mcp.tool()
+    @mcp.tool(name="respond_to_cancellation")
     async def respond_to_cancellation_tool(
-        task_uuid: str,
+        mission_uuid: str,
         action: str,
         reason: str | None = None,
     ) -> str:
@@ -315,7 +315,7 @@ def main():
         Declining: keeps the mission active, worker must continue.
 
         Args:
-            task_uuid: UUID of the mission with pending cancellation
+            mission_uuid: UUID of the mission with pending cancellation
             action: "approve" or "decline"
             reason: Optional reason (useful when declining to explain why)
 
@@ -323,9 +323,9 @@ def main():
             JSON string with updated mission details or error message.
             Returns 400 if no pending cancellation request exists.
         """
-        return await respond_to_cancellation(task_uuid, action, reason)
+        return await respond_to_cancellation(mission_uuid, action, reason)
 
-    @mcp.tool()
+    @mcp.tool(name="get_categories")
     async def get_categories_tool() -> str:
         """
         Get list of available mission categories.
@@ -341,7 +341,7 @@ def main():
         """
         return await get_categories()
 
-    @mcp.tool()
+    @mcp.tool(name="submit_feedback")
     async def submit_feedback_tool(
         report_type: str,
         title: str,

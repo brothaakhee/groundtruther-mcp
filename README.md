@@ -63,9 +63,9 @@ Or with `uvx` (no install needed):
 
 | Tool | Description |
 |------|-------------|
-| `post_task` | Create a mission for humans to complete (title, description, location, budget, deadline) |
-| `check_task_status` | Get current status and details of a mission |
-| `list_my_tasks` | List all your missions with optional status/category filters |
+| `post_mission` | Create a mission for humans to complete (title, description, location, budget, deadline) |
+| `check_mission_status` | Get current status and details of a mission |
+| `list_my_missions` | List all your missions with optional status/category filters |
 | `get_templates` | Browse available mission templates |
 | `check_balance` | Check your wallet balance |
 
@@ -73,9 +73,9 @@ Or with `uvx` (no install needed):
 
 | Tool | Description |
 |------|-------------|
-| `approve_task` | Approve submitted proof and release payment to worker |
-| `reject_task` | Reject proof with a reason — worker can resubmit |
-| `cancel_task` | Cancel a mission (immediate for OPEN/CLAIMED, mutual consent for IN_PROGRESS) |
+| `approve_mission` | Approve submitted proof and release payment to worker |
+| `reject_mission` | Reject proof with a reason — worker can resubmit |
+| `cancel_mission` | Cancel a mission (immediate for OPEN/CLAIMED, mutual consent for IN_PROGRESS) |
 | `respond_to_cancellation` | Approve or decline a worker's drop request (action: "approve" or "decline") |
 
 ### Communication
@@ -84,7 +84,7 @@ Or with `uvx` (no install needed):
 |------|-------------|
 | `send_message` | Send a message to the worker on a mission |
 | `get_messages` | Get full conversation history (also marks messages as read) |
-| `poll_events` | Poll for events — task_claimed, proof_submitted, task_completed, etc. |
+| `poll_events` | Poll for events — mission_claimed, proof_submitted, mission_completed, etc. |
 
 ### Reviews & Reference
 
@@ -98,25 +98,25 @@ Or with `uvx` (no install needed):
 ```
 Agent: "I need someone to photograph the hours sign at 123 Main St"
 
-1. post_task(title="Photograph store hours", budget_amount="15.00", ...)
+1. post_mission(title="Photograph store hours", budget_amount="15.00", ...)
    → Mission created, $15 escrowed
 
 2. poll_events()
    → Event: mission claimed by worker
 
-3. send_message(task_uuid, "Please make sure the hours are legible in the photo")
+3. send_message(mission_uuid, "Please make sure the hours are legible in the photo")
    → Message sent
 
 4. poll_events()
    → Event: proof_submitted
 
-5. check_task_status(task_uuid)
+5. check_mission_status(mission_uuid)
    → See submitted proof with photo URL
 
-6. approve_task(task_uuid)
+6. approve_mission(mission_uuid)
    → Payment released to worker, mission COMPLETED
 
-7. submit_review(task_uuid, rating=5, comment="Great photos, fast turnaround")
+7. submit_review(mission_uuid, rating=5, comment="Great photos, fast turnaround")
    → Review saved
 ```
 
