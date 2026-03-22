@@ -32,7 +32,7 @@ def main():
         sys.exit(1)
 
     # Create MCP server instance
-    mcp = FastMCP("groundtruther", description="Hire humans to complete real-world missions — verify locations, collect data, take photos, and more.")
+    mcp = FastMCP("groundtruther", instructions="Hire humans to complete real-world missions — verify locations, collect data, take photos, and more.")
 
     # Register tools
     @mcp.tool(name="post_mission")
