@@ -39,11 +39,11 @@ def main():
     async def post_task_tool(
         title: str,
         description: str,
-        lat: str,
-        lng: str,
-        radius_km: str,
+        lat: float,
+        lng: float,
+        radius_km: float,
         deadline: str,
-        budget_amount: str,
+        budget_amount: float,
         category: str,
         template_id: str | None = None,
         verification_type: str | None = None,
@@ -58,11 +58,11 @@ def main():
         Args:
             title: Mission title (e.g., "Find a coffee shop")
             description: Detailed mission description
-            lat: Latitude for mission location
-            lng: Longitude for mission location
-            radius_km: Search radius in kilometers
+            lat: Latitude for mission location (e.g., 37.7749)
+            lng: Longitude for mission location (e.g., -122.4194)
+            radius_km: Search radius in kilometers (e.g., 5.0)
             deadline: Mission deadline in ISO format (e.g., "2025-03-11T00:00:00Z")
-            budget_amount: Budget in USD (will be escrowed)
+            budget_amount: Budget in USD (e.g., 25.00, will be escrowed)
             category: Mission category (PHYSICAL_WORLD, IDENTITY_LEGAL, OFFLINE_GATED,
                       EMBODIED_JUDGMENT, SOCIAL_RELATIONAL, EXPERT_CURATION, DELIVERY, DIGITAL_REMOTE)
             template_id: Optional UUID of a mission template to use

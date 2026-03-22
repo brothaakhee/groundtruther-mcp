@@ -84,11 +84,11 @@ class TestPostTask:
             result = await post_task(
                 title="Find a coffee shop",
                 description="Find a good coffee shop near downtown",
-                lat="40.7128",
-                lng="-74.0060",
-                radius_km="5",
+                lat=40.7128,
+                lng=-74.0060,
+                radius_km=5.0,
                 deadline=(datetime.now() + timedelta(days=7)).isoformat(),
-                budget_amount="50.00",
+                budget_amount=50.00,
                 category="location-based",
                 template_id=None,
             )
@@ -127,11 +127,11 @@ class TestPostTask:
             result = await post_task(
                 title="Find a coffee shop",
                 description="Find a good coffee shop near downtown",
-                lat="40.7128",
-                lng="-74.0060",
-                radius_km="5",
+                lat=40.7128,
+                lng=-74.0060,
+                radius_km=5.0,
                 deadline=(datetime.now() + timedelta(days=7)).isoformat(),
-                budget_amount="50.00",
+                budget_amount=50.00,
                 category="location-based",
                 template_id=template_uuid,
             )
@@ -157,11 +157,11 @@ class TestPostTask:
             result = await post_task(
                 title="Expensive task",
                 description="This is too expensive",
-                lat="40.7128",
-                lng="-74.0060",
-                radius_km="5",
+                lat=40.7128,
+                lng=-74.0060,
+                radius_km=5.0,
                 deadline=(datetime.now() + timedelta(days=7)).isoformat(),
-                budget_amount="999.00",
+                budget_amount=999.00,
                 category="location-based",
             )
 
@@ -187,11 +187,11 @@ class TestPostTask:
             result = await post_task(
                 title="",
                 description="Missing title",
-                lat="40.7128",
-                lng="-74.0060",
-                radius_km="5",
+                lat=40.7128,
+                lng=-74.0060,
+                radius_km=5.0,
                 deadline=(datetime.now() + timedelta(days=7)).isoformat(),
-                budget_amount="50.00",
+                budget_amount=50.00,
                 category="location-based",
             )
 
@@ -214,11 +214,11 @@ class TestPostTask:
             result = await post_task(
                 title="Task",
                 description="Description",
-                lat="40.7128",
-                lng="-74.0060",
-                radius_km="5",
+                lat=40.7128,
+                lng=-74.0060,
+                radius_km=5.0,
                 deadline=(datetime.now() + timedelta(days=7)).isoformat(),
-                budget_amount="50.00",
+                budget_amount=50.00,
                 category="location-based",
             )
 
@@ -1401,11 +1401,11 @@ class TestPostTaskExtended:
             result = await post_task(
                 title="Survey",
                 description="Fill out survey",
-                lat="40.7128",
-                lng="-74.0060",
-                radius_km="5",
+                lat=40.7128,
+                lng=-74.0060,
+                radius_km=5.0,
                 deadline="2026-04-01T00:00:00Z",
-                budget_amount="25.00",
+                budget_amount=25.00,
                 category="PHYSICAL_WORLD",
                 verification_type="STRUCTURED_DATA",
             )
@@ -1441,11 +1441,11 @@ class TestPostTaskExtended:
             result = await post_task(
                 title="Store check",
                 description="Check store details",
-                lat="40.7128",
-                lng="-74.0060",
-                radius_km="5",
+                lat=40.7128,
+                lng=-74.0060,
+                radius_km=5.0,
                 deadline="2026-04-01T00:00:00Z",
-                budget_amount="25.00",
+                budget_amount=25.00,
                 category="PHYSICAL_WORLD",
                 acceptance_contract=contract,
             )
@@ -1463,11 +1463,11 @@ class TestPostTaskExtended:
         result = await post_task(
             title="Test",
             description="Test",
-            lat="40.7128",
-            lng="-74.0060",
-            radius_km="5",
+            lat=40.7128,
+            lng=-74.0060,
+            radius_km=5.0,
             deadline="2026-04-01T00:00:00Z",
-            budget_amount="25.00",
+            budget_amount=25.00,
             category="PHYSICAL_WORLD",
             acceptance_contract="not valid json{",
         )
