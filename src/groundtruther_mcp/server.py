@@ -62,17 +62,28 @@ def main():
             category: Mission category (PHYSICAL_WORLD, IDENTITY_LEGAL, OFFLINE_GATED,
                       EMBODIED_JUDGMENT, SOCIAL_RELATIONAL, EXPERT_CURATION, DELIVERY, DIGITAL_REMOTE)
             acceptance_contract: JSON string defining what proof the worker must submit.
-                VALID KEYS (only these are accepted, unknown keys are rejected):
-                - "notes" (REQUIRED): string — instructions for the worker
-                - "required_media": array of {"type": "photo"|"video", "label": string, "required": bool}
-                - "required_fields": array of {"key": string, "type": "text"|"number"|"boolean"|"date"|"textarea", "label": string, "required": bool}
-                - "required_urls": array of {"key": string, "label": string, "required": bool}
-                - "gps_required": bool — require GPS coordinates on proof
-                - "gps_max_distance_km": number — max distance from mission location
-                - "gps_required_at_waypoints": bool — (DELIVERY only) GPS at each stop
-                - "min_photos_per_waypoint": int — (DELIVERY only) photos per stop
+                VALID KEYS (only these — unknown keys are rejected):
+                - "notes" (REQUIRED string): instructions shown to the worker
+                - "required_media" (array): each item is {"type": "photo" or "video", "label": "description", "required": true/false}
+                - "required_fields" (array): each item is {"key": "field_id", "type": "text"|"number"|"boolean"|"date"|"textarea", "label": "Display Name", "required": true/false}
+                - "required_urls" (array): each item is {"key": "url_id", "label": "Display Name", "required": true/false}
+                - "gps_required" (bool): require GPS on proof submission
+                - "gps_max_distance_km" (number): max km from mission location
+                - "gps_required_at_waypoints" (bool): DELIVERY only
+                - "min_photos_per_waypoint" (int): DELIVERY only
                 Must include "notes" AND at least one of: required_media, required_fields, or required_urls.
-                Example: {"required_media": [{"type": "photo", "label": "Store entrance", "required": true}], "notes": "Take a clear photo of the store entrance."}
+
+                Photo mission example:
+                {"required_media": [{"type": "photo", "label": "Store entrance", "required": true}], "gps_required": true, "notes": "Take a clear photo on-site."}
+
+                Data collection example:
+                {"required_fields": [{"key": "store_name", "type": "text", "label": "Store Name", "required": true}, {"key": "price", "type": "number", "label": "Price ($)", "required": true}], "notes": "Visit the store and record the details."}
+
+                URL submission example:
+                {"required_urls": [{"key": "doc_link", "label": "Google Doc URL", "required": true}], "notes": "Submit a link to your completed document."}
+
+                Mixed (photo + data) example:
+                {"required_media": [{"type": "photo", "label": "Receipt photo", "required": true}], "required_fields": [{"key": "total", "type": "number", "label": "Receipt Total", "required": true}], "notes": "Photograph the receipt and enter the total."}
             lat: Latitude for mission location (required for physical categories, omit for DIGITAL_REMOTE)
             lng: Longitude for mission location
             radius_km: Search radius in kilometers (e.g., 5.0)
