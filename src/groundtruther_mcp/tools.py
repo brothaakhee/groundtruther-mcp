@@ -33,10 +33,11 @@ async def post_mission(
         budget_amount: Budget in USD
         category: Mission category (PHYSICAL_WORLD, IDENTITY_LEGAL, OFFLINE_GATED,
                   EMBODIED_JUDGMENT, SOCIAL_RELATIONAL, EXPERT_CURATION, DELIVERY, DIGITAL_REMOTE)
-        acceptance_contract: JSON string defining acceptance criteria. Must include "notes" and
-                  at least one of: "required_media", "required_fields", "required_urls".
-                  Example: {"required_media": [{"type": "photo", "label": "Storefront", "required": true}],
-                  "notes": "Take a clear photo of the store entrance."}
+        acceptance_contract: JSON string defining what proof the worker must submit.
+                  Valid keys: "notes" (required), "required_media", "required_fields",
+                  "required_urls", "gps_required", "gps_max_distance_km",
+                  "gps_required_at_waypoints", "min_photos_per_waypoint".
+                  Must include "notes" and at least one of: required_media, required_fields, required_urls.
         lat: Latitude for mission location (required for physical categories, omit for DIGITAL_REMOTE)
         lng: Longitude for mission location
         radius_km: Search radius in kilometers

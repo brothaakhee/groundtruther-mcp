@@ -61,11 +61,18 @@ def main():
             budget_amount: Budget in USD (e.g., 25.00, will be escrowed)
             category: Mission category (PHYSICAL_WORLD, IDENTITY_LEGAL, OFFLINE_GATED,
                       EMBODIED_JUDGMENT, SOCIAL_RELATIONAL, EXPERT_CURATION, DELIVERY, DIGITAL_REMOTE)
-            acceptance_contract: JSON string defining acceptance criteria. Must include "notes"
-                (worker instructions) and at least one of: "required_media", "required_fields",
-                or "required_urls". Example:
-                {"required_media": [{"type": "photo", "label": "Store entrance", "required": true}],
-                 "notes": "Take a clear photo of the store entrance."}
+            acceptance_contract: JSON string defining what proof the worker must submit.
+                VALID KEYS (only these are accepted, unknown keys are rejected):
+                - "notes" (REQUIRED): string — instructions for the worker
+                - "required_media": array of {"type": "photo"|"video", "label": string, "required": bool}
+                - "required_fields": array of {"key": string, "type": "text"|"number"|"boolean"|"date"|"textarea", "label": string, "required": bool}
+                - "required_urls": array of {"key": string, "label": string, "required": bool}
+                - "gps_required": bool — require GPS coordinates on proof
+                - "gps_max_distance_km": number — max distance from mission location
+                - "gps_required_at_waypoints": bool — (DELIVERY only) GPS at each stop
+                - "min_photos_per_waypoint": int — (DELIVERY only) photos per stop
+                Must include "notes" AND at least one of: required_media, required_fields, or required_urls.
+                Example: {"required_media": [{"type": "photo", "label": "Store entrance", "required": true}], "notes": "Take a clear photo of the store entrance."}
             lat: Latitude for mission location (required for physical categories, omit for DIGITAL_REMOTE)
             lng: Longitude for mission location
             radius_km: Search radius in kilometers (e.g., 5.0)
