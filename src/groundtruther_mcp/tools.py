@@ -14,14 +14,14 @@ def _error_response(message: str) -> str:
 async def post_mission(
     title: str,
     description: str,
-    lat: float,
-    lng: float,
-    radius_km: float,
     deadline: str,
     budget_amount: float,
     category: str,
+    acceptance_contract: str,
+    lat: Optional[float] = None,
+    lng: Optional[float] = None,
+    radius_km: Optional[float] = None,
     template_id: Optional[str] = None,
-    acceptance_contract: Optional[str] = None,
 ) -> str:
     """
     Create a new mission.
@@ -29,15 +29,18 @@ async def post_mission(
     Args:
         title: Mission title
         description: Mission description
-        lat: Latitude for mission location
-        lng: Longitude for mission location
-        radius_km: Search radius in kilometers
         deadline: Mission deadline (ISO format)
         budget_amount: Budget in USD
         category: Mission category (PHYSICAL_WORLD, IDENTITY_LEGAL, OFFLINE_GATED,
                   EMBODIED_JUDGMENT, SOCIAL_RELATIONAL, EXPERT_CURATION, DELIVERY, DIGITAL_REMOTE)
+        acceptance_contract: JSON string defining acceptance criteria. Must include "notes" and
+                  at least one of: "required_media", "required_fields", "required_urls".
+                  Example: {"required_media": [{"type": "photo", "label": "Storefront", "required": true}],
+                  "notes": "Take a clear photo of the store entrance."}
+        lat: Latitude for mission location (required for physical categories, omit for DIGITAL_REMOTE)
+        lng: Longitude for mission location
+        radius_km: Search radius in kilometers
         template_id: Optional mission template UUID
-        acceptance_contract: JSON string defining acceptance criteria (required fields, min photos, GPS requirement)
 
     Returns:
         JSON string with mission details or error
@@ -45,25 +48,30 @@ async def post_mission(
     try:
         client = APIClient()
 
+        # Parse acceptance_contract
+        try:
+            parsed_contract = json.loads(acceptance_contract)
+        except json.JSONDecodeError:
+            return _error_response("acceptance_contract must be valid JSON")
+
         # Build request payload
         payload = {
             "title": title,
             "description": description,
-            "latitude": lat,
-            "longitude": lng,
-            "radius_km": radius_km,
             "deadline": deadline,
             "budget_amount": budget_amount,
             "category": category,
+            "acceptance_contract": parsed_contract,
         }
 
+        if lat is not None:
+            payload["latitude"] = lat
+        if lng is not None:
+            payload["longitude"] = lng
+        if radius_km is not None:
+            payload["radius_km"] = radius_km
         if template_id:
-            payload["template"] = template_id
-        if acceptance_contract:
-            try:
-                payload["acceptance_contract"] = json.loads(acceptance_contract)
-            except json.JSONDecodeError:
-                return _error_response("acceptance_contract must be valid JSON")
+            payload["template_id"] = template_id
 
         # Make API call
         response = await client.post("/tasks/", data=payload)
@@ -194,6 +202,10 @@ async def approve_mission(mission_uuid: str) -> str:
             return _error_response(
                 result["data"].get("detail", "Cannot approve mission in current state")
             )
+        elif result["status_code"] == 409:
+            return _error_response(
+                result["data"].get("detail", "Cannot approve — cancellation is pending")
+            )
         elif result["status_code"] == 401:
             return _error_response("Unauthorized: Invalid API key")
         else:
@@ -237,6 +249,10 @@ async def reject_mission(mission_uuid: str, reason: str) -> str:
         elif result["status_code"] == 400:
             return _error_response(
                 result["data"].get("detail", "Cannot reject mission in current state")
+            )
+        elif result["status_code"] == 409:
+            return _error_response(
+                result["data"].get("detail", "Cannot reject — cancellation is pending")
             )
         elif result["status_code"] == 401:
             return _error_response("Unauthorized: Invalid API key")

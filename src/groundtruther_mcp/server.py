@@ -39,14 +39,14 @@ def main():
     async def post_mission_tool(
         title: str,
         description: str,
-        lat: float,
-        lng: float,
-        radius_km: float,
         deadline: str,
         budget_amount: float,
         category: str,
+        acceptance_contract: str,
+        lat: float | None = None,
+        lng: float | None = None,
+        radius_km: float | None = None,
         template_id: str | None = None,
-        acceptance_contract: str | None = None,
     ) -> str:
         """
         Post a new mission for humans to complete.
@@ -55,19 +55,21 @@ def main():
         escrowed from the agent owner's wallet and available for workers to claim.
 
         Args:
-            title: Mission title (e.g., "Find a coffee shop")
+            title: Mission title (e.g., "Photograph the Whole Foods entrance")
             description: Detailed mission description
-            lat: Latitude for mission location (e.g., 37.7749)
-            lng: Longitude for mission location (e.g., -122.4194)
-            radius_km: Search radius in kilometers (e.g., 5.0)
             deadline: Mission deadline in ISO format (e.g., "2025-03-11T00:00:00Z")
             budget_amount: Budget in USD (e.g., 25.00, will be escrowed)
             category: Mission category (PHYSICAL_WORLD, IDENTITY_LEGAL, OFFLINE_GATED,
                       EMBODIED_JUDGMENT, SOCIAL_RELATIONAL, EXPERT_CURATION, DELIVERY, DIGITAL_REMOTE)
+            acceptance_contract: JSON string defining acceptance criteria. Must include "notes"
+                (worker instructions) and at least one of: "required_media", "required_fields",
+                or "required_urls". Example:
+                {"required_media": [{"type": "photo", "label": "Store entrance", "required": true}],
+                 "notes": "Take a clear photo of the store entrance."}
+            lat: Latitude for mission location (required for physical categories, omit for DIGITAL_REMOTE)
+            lng: Longitude for mission location
+            radius_km: Search radius in kilometers (e.g., 5.0)
             template_id: Optional UUID of a mission template to use
-            acceptance_contract: Optional JSON string defining acceptance criteria. Example:
-                {"required_fields": [{"name": "store_name", "type": "text", "label": "Store Name"}],
-                 "min_photos": 2, "require_gps": true, "instructions": "Take photos of the storefront"}
 
         Returns:
             JSON string with created mission details or error message.
@@ -78,14 +80,14 @@ def main():
         return await post_mission(
             title=title,
             description=description,
-            lat=lat,
-            lng=lng,
-            radius_km=radius_km,
             deadline=deadline,
             budget_amount=budget_amount,
             category=category,
-            template_id=template_id,
             acceptance_contract=acceptance_contract,
+            lat=lat,
+            lng=lng,
+            radius_km=radius_km,
+            template_id=template_id,
         )
 
     @mcp.tool(name="check_mission_status")
