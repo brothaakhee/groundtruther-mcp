@@ -46,7 +46,6 @@ def main():
         budget_amount: float,
         category: str,
         template_id: str | None = None,
-        verification_type: str | None = None,
         acceptance_contract: str | None = None,
     ) -> str:
         """
@@ -66,8 +65,6 @@ def main():
             category: Mission category (PHYSICAL_WORLD, IDENTITY_LEGAL, OFFLINE_GATED,
                       EMBODIED_JUDGMENT, SOCIAL_RELATIONAL, EXPERT_CURATION, DELIVERY, DIGITAL_REMOTE)
             template_id: Optional UUID of a mission template to use
-            verification_type: Proof type required (PHOTO_PROOF, VIDEO_PROOF, STRUCTURED_DATA, SIGNED_RECEIPT).
-                             Defaults to PHOTO_PROOF if not specified.
             acceptance_contract: Optional JSON string defining acceptance criteria. Example:
                 {"required_fields": [{"name": "store_name", "type": "text", "label": "Store Name"}],
                  "min_photos": 2, "require_gps": true, "instructions": "Take photos of the storefront"}
@@ -88,7 +85,6 @@ def main():
             budget_amount=budget_amount,
             category=category,
             template_id=template_id,
-            verification_type=verification_type,
             acceptance_contract=acceptance_contract,
         )
 

@@ -1384,40 +1384,6 @@ class TestPostMissionExtended:
     """Tests for post_mission tool with new parameters."""
 
     @pytest.mark.asyncio
-    async def test_post_task_with_verification_type(self, api_key, api_base_url, mission_uuid):
-        """Test task creation with verification_type."""
-        from groundtruther_mcp.tools import post_mission
-
-        response_data = {"id": mission_uuid, "status": "OPEN", "verification_type": "STRUCTURED_DATA"}
-
-        with patch("httpx.AsyncClient") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_response = MagicMock()
-            mock_response.status_code = 201
-            mock_response.json.return_value = response_data
-            mock_client.post.return_value = mock_response
-            mock_client_class.return_value.__aenter__.return_value = mock_client
-
-            result = await post_mission(
-                title="Survey",
-                description="Fill out survey",
-                lat=40.7128,
-                lng=-74.0060,
-                radius_km=5.0,
-                deadline="2026-04-01T00:00:00Z",
-                budget_amount=25.00,
-                category="PHYSICAL_WORLD",
-                verification_type="STRUCTURED_DATA",
-            )
-
-            call_args = mock_client.post.call_args
-            payload = call_args[1]["json"]
-            assert payload["verification_type"] == "STRUCTURED_DATA"
-
-            response = json.loads(result)
-            assert response["verification_type"] == "STRUCTURED_DATA"
-
-    @pytest.mark.asyncio
     async def test_post_task_with_acceptance_contract(self, api_key, api_base_url, mission_uuid):
         """Test task creation with acceptance_contract JSON."""
         from groundtruther_mcp.tools import post_mission

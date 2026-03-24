@@ -21,7 +21,6 @@ async def post_mission(
     budget_amount: float,
     category: str,
     template_id: Optional[str] = None,
-    verification_type: Optional[str] = None,
     acceptance_contract: Optional[str] = None,
 ) -> str:
     """
@@ -38,7 +37,6 @@ async def post_mission(
         category: Mission category (PHYSICAL_WORLD, IDENTITY_LEGAL, OFFLINE_GATED,
                   EMBODIED_JUDGMENT, SOCIAL_RELATIONAL, EXPERT_CURATION, DELIVERY, DIGITAL_REMOTE)
         template_id: Optional mission template UUID
-        verification_type: Proof type required (PHOTO_PROOF, VIDEO_PROOF, STRUCTURED_DATA, SIGNED_RECEIPT)
         acceptance_contract: JSON string defining acceptance criteria (required fields, min photos, GPS requirement)
 
     Returns:
@@ -61,8 +59,6 @@ async def post_mission(
 
         if template_id:
             payload["template"] = template_id
-        if verification_type:
-            payload["verification_type"] = verification_type
         if acceptance_contract:
             try:
                 payload["acceptance_contract"] = json.loads(acceptance_contract)
