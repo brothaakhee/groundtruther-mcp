@@ -58,7 +58,7 @@ class TestPostMission:
             "description": "Find a good coffee shop near downtown",
             "latitude": "40.7128",
             "longitude": "-74.0060",
-            "radius_km": "5",
+            "radius_mi": "5",
             "deadline": (datetime.now() + timedelta(days=7)).isoformat(),
             "budget_amount": "50.00",
             "category": "location-based",
@@ -86,7 +86,7 @@ class TestPostMission:
                 description="Find a good coffee shop near downtown",
                 lat=40.7128,
                 lng=-74.0060,
-                radius_km=5.0,
+                radius_mi=5.0,
                 deadline=(datetime.now() + timedelta(days=7)).isoformat(),
                 budget_amount=50.00,
                 category="location-based",
@@ -129,7 +129,7 @@ class TestPostMission:
                 description="Find a good coffee shop near downtown",
                 lat=40.7128,
                 lng=-74.0060,
-                radius_km=5.0,
+                radius_mi=5.0,
                 deadline=(datetime.now() + timedelta(days=7)).isoformat(),
                 budget_amount=50.00,
                 category="location-based",
@@ -159,7 +159,7 @@ class TestPostMission:
                 description="This is too expensive",
                 lat=40.7128,
                 lng=-74.0060,
-                radius_km=5.0,
+                radius_mi=5.0,
                 deadline=(datetime.now() + timedelta(days=7)).isoformat(),
                 budget_amount=999.00,
                 category="location-based",
@@ -189,7 +189,7 @@ class TestPostMission:
                 description="Missing title",
                 lat=40.7128,
                 lng=-74.0060,
-                radius_km=5.0,
+                radius_mi=5.0,
                 deadline=(datetime.now() + timedelta(days=7)).isoformat(),
                 budget_amount=50.00,
                 category="location-based",
@@ -216,7 +216,7 @@ class TestPostMission:
                 description="Description",
                 lat=40.7128,
                 lng=-74.0060,
-                radius_km=5.0,
+                radius_mi=5.0,
                 deadline=(datetime.now() + timedelta(days=7)).isoformat(),
                 budget_amount=50.00,
                 category="location-based",
@@ -420,6 +420,63 @@ class TestListMyMissions:
 
             response = json.loads(result)
             assert "error" in response
+
+
+class TestEscalateMission:
+    """Tests for escalate_mission tool."""
+
+    @pytest.mark.asyncio
+    async def test_escalate_mission_success(self, mission_uuid):
+        from groundtruther_mcp.tools import escalate_mission
+
+        response_data = {
+            "id": "550e8400-e29b-41d4-a716-446655440099",
+            "status": "open",
+            "note": "Worker and agent disagree on whether the proof satisfies the mission.",
+        }
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_response = MagicMock()
+            mock_response.status_code = 201
+            mock_response.json.return_value = response_data
+            mock_client.post.return_value = mock_response
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+
+            result = await escalate_mission(
+                mission_uuid,
+                "Worker and agent disagree on whether the proof satisfies the mission.",
+            )
+
+            mock_client.post.assert_called_once()
+            call_args = mock_client.post.call_args
+            assert f"/tasks/{mission_uuid}/escalate/" in call_args[0][0]
+            assert call_args[1]["json"]["note"] == (
+                "Worker and agent disagree on whether the proof satisfies the mission."
+            )
+
+            response = json.loads(result)
+            assert response["status"] == "open"
+
+    @pytest.mark.asyncio
+    async def test_escalate_mission_conflict(self, mission_uuid):
+        from groundtruther_mcp.tools import escalate_mission
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_response = MagicMock()
+            mock_response.status_code = 409
+            mock_response.json.return_value = {
+                "detail": "An escalation is already open for this mission."
+            }
+            mock_client.post.return_value = mock_response
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+
+            result = await escalate_mission(mission_uuid, "Need manual review.")
+
+            response = json.loads(result)
+            assert "error" in response
+            assert "already open" in response["error"]
 
 
 class TestApproveMission:
@@ -1409,7 +1466,7 @@ class TestPostMissionExtended:
                 description="Check store details",
                 lat=40.7128,
                 lng=-74.0060,
-                radius_km=5.0,
+                radius_mi=5.0,
                 deadline="2026-04-01T00:00:00Z",
                 budget_amount=25.00,
                 category="PHYSICAL_WORLD",
@@ -1431,7 +1488,7 @@ class TestPostMissionExtended:
             description="Test",
             lat=40.7128,
             lng=-74.0060,
-            radius_km=5.0,
+            radius_mi=5.0,
             deadline="2026-04-01T00:00:00Z",
             budget_amount=25.00,
             category="PHYSICAL_WORLD",

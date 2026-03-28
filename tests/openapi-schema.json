@@ -2168,12 +2168,12 @@
                     },
                     {
                         "in": "query",
-                        "name": "radius_km",
+                        "name": "radius_mi",
                         "schema": {
                             "type": "number",
                             "format": "double"
                         },
-                        "description": "Radius in km (default 10)"
+                        "description": "Radius in miles (default 10)"
                     },
                     {
                         "in": "query",
@@ -3946,7 +3946,7 @@
                         "pattern": "^-?\\d{0,3}(?:\\.\\d{0,7})?$",
                         "nullable": true
                     },
-                    "radius_km": {
+                    "radius_mi": {
                         "type": "string",
                         "format": "decimal",
                         "pattern": "^-?\\d{0,6}(?:\\.\\d{0,2})?$",
@@ -4030,7 +4030,7 @@
                         "pattern": "^-?\\d{0,3}(?:\\.\\d{0,7})?$",
                         "nullable": true
                     },
-                    "radius_km": {
+                    "radius_mi": {
                         "type": "string",
                         "format": "decimal",
                         "pattern": "^-?\\d{0,6}(?:\\.\\d{0,2})?$",
@@ -4219,7 +4219,7 @@
                         "pattern": "^-?\\d{0,3}(?:\\.\\d{0,7})?$",
                         "nullable": true
                     },
-                    "radius_km": {
+                    "radius_mi": {
                         "type": "string",
                         "format": "decimal",
                         "pattern": "^-?\\d{0,6}(?:\\.\\d{0,2})?$",
@@ -4279,7 +4279,7 @@
                         "pattern": "^-?\\d{0,3}(?:\\.\\d{0,7})?$",
                         "nullable": true
                     },
-                    "radius_km": {
+                    "radius_mi": {
                         "type": "string",
                         "format": "decimal",
                         "pattern": "^-?\\d{0,6}(?:\\.\\d{0,2})?$",
@@ -4698,7 +4698,7 @@
                         "pattern": "^-?\\d{0,3}(?:\\.\\d{0,7})?$",
                         "nullable": true
                     },
-                    "radius_km": {
+                    "radius_mi": {
                         "type": "string",
                         "format": "decimal",
                         "pattern": "^-?\\d{0,6}(?:\\.\\d{0,2})?$",
@@ -4902,7 +4902,7 @@
                         "format": "decimal",
                         "pattern": "^-?\\d{0,3}(?:\\.\\d{0,7})?$"
                     },
-                    "radius_km": {
+                    "radius_mi": {
                         "type": "string",
                         "format": "decimal",
                         "pattern": "^-?\\d{0,6}(?:\\.\\d{0,2})?$",
@@ -4950,7 +4950,7 @@
                         "format": "decimal",
                         "pattern": "^-?\\d{0,3}(?:\\.\\d{0,7})?$"
                     },
-                    "radius_km": {
+                    "radius_mi": {
                         "type": "string",
                         "format": "decimal",
                         "pattern": "^-?\\d{0,6}(?:\\.\\d{0,2})?$",

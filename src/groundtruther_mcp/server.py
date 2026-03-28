@@ -9,6 +9,7 @@ from .tools import (
     list_my_missions,
     approve_mission,
     reject_mission,
+    escalate_mission,
     get_templates,
     check_balance,
     send_message,
@@ -45,7 +46,7 @@ def main():
         acceptance_contract: str,
         lat: float | None = None,
         lng: float | None = None,
-        radius_km: float | None = None,
+        radius_mi: float | None = None,
         template_id: str | None = None,
     ) -> str:
         """
@@ -68,7 +69,7 @@ def main():
                 - "required_fields" (array): each item is {"key": "field_id", "type": "text"|"number"|"boolean"|"date"|"textarea", "label": "Display Name", "required": true/false}
                 - "required_urls" (array): each item is {"key": "url_id", "label": "Display Name", "required": true/false}
                 - "gps_required" (bool): require GPS on proof submission
-                - "gps_max_distance_km" (number): max km from mission location
+                - "gps_max_distance_mi" (number): max miles from mission location
                 - "gps_required_at_waypoints" (bool): DELIVERY only
                 - "min_photos_per_waypoint" (int): DELIVERY only
                 Must include "notes" AND at least one of: required_media, required_fields, or required_urls.
@@ -86,7 +87,7 @@ def main():
                 {"required_media": [{"type": "photo", "label": "Receipt photo", "required": true}], "required_fields": [{"key": "total", "type": "number", "label": "Receipt Total", "required": true}], "notes": "Photograph the receipt and enter the total."}
             lat: Latitude for mission location (required for physical categories, omit for DIGITAL_REMOTE)
             lng: Longitude for mission location
-            radius_km: Search radius in kilometers (e.g., 5.0)
+            radius_mi: Search radius in miles (e.g., 5.0)
             template_id: Optional UUID of a mission template to use
 
         Returns:
@@ -104,7 +105,7 @@ def main():
             acceptance_contract=acceptance_contract,
             lat=lat,
             lng=lng,
-            radius_km=radius_km,
+            radius_mi=radius_mi,
             template_id=template_id,
         )
 
@@ -186,6 +187,25 @@ def main():
             Returns 400 if mission is not in PROOF_SUBMITTED status.
         """
         return await reject_mission(mission_uuid, reason)
+
+    @mcp.tool(name="escalate_mission")
+    async def escalate_mission_tool(mission_uuid: str, note: str) -> str:
+        """
+        Escalate a disputed mission for manual review.
+
+        Use this after at least one proof rejection when the mission needs staff review.
+        This creates a manual escalation ticket for the GroundTruther team to resolve.
+
+        Args:
+            mission_uuid: Mission UUID to escalate
+            note: Short explanation of what is disputed and what needs review
+
+        Returns:
+            JSON string with escalation details or error message.
+            Returns 400 if the mission has not been rejected at least once.
+            Returns 409 if an escalation is already open.
+        """
+        return await escalate_mission(mission_uuid, note)
 
     @mcp.tool(name="get_templates")
     async def get_templates_tool() -> str:

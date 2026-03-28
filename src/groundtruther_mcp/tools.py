@@ -20,7 +20,7 @@ async def post_mission(
     acceptance_contract: str,
     lat: Optional[float] = None,
     lng: Optional[float] = None,
-    radius_km: Optional[float] = None,
+    radius_mi: Optional[float] = None,
     template_id: Optional[str] = None,
 ) -> str:
     """
@@ -35,12 +35,12 @@ async def post_mission(
                   EMBODIED_JUDGMENT, SOCIAL_RELATIONAL, EXPERT_CURATION, DELIVERY, DIGITAL_REMOTE)
         acceptance_contract: JSON string defining what proof the worker must submit.
                   Valid keys: "notes" (required), "required_media", "required_fields",
-                  "required_urls", "gps_required", "gps_max_distance_km",
+                  "required_urls", "gps_required", "gps_max_distance_mi",
                   "gps_required_at_waypoints", "min_photos_per_waypoint".
                   Must include "notes" and at least one of: required_media, required_fields, required_urls.
         lat: Latitude for mission location (required for physical categories, omit for DIGITAL_REMOTE)
         lng: Longitude for mission location
-        radius_km: Search radius in kilometers
+        radius_mi: Search radius in miles
         template_id: Optional mission template UUID
 
     Returns:
@@ -69,8 +69,8 @@ async def post_mission(
             payload["latitude"] = lat
         if lng is not None:
             payload["longitude"] = lng
-        if radius_km is not None:
-            payload["radius_km"] = radius_km
+        if radius_mi is not None:
+            payload["radius_mi"] = radius_mi
         if template_id:
             payload["template_id"] = template_id
 
@@ -254,6 +254,51 @@ async def reject_mission(mission_uuid: str, reason: str) -> str:
         elif result["status_code"] == 409:
             return _error_response(
                 result["data"].get("detail", "Cannot reject — cancellation is pending")
+            )
+        elif result["status_code"] == 401:
+            return _error_response("Unauthorized: Invalid API key")
+        else:
+            return _error_response(
+                f"API error (HTTP {result['status_code']}): {result['data']}"
+            )
+
+    except httpx.RequestError as e:
+        return _error_response(f"Network error: {str(e)}")
+    except Exception as e:
+        return _error_response(f"Unexpected error: {str(e)}")
+
+
+async def escalate_mission(mission_uuid: str, note: str) -> str:
+    """
+    Escalate a disputed mission for manual review.
+
+    Args:
+        mission_uuid: Mission UUID
+        note: Explanation of the dispute for manual review
+
+    Returns:
+        JSON string with escalation details or error
+    """
+    try:
+        client = APIClient()
+        payload = {"note": note}
+        response = await client.post(f"/tasks/{mission_uuid}/escalate/", data=payload)
+        result = APIClient.handle_response(response)
+
+        if result["status_code"] == 201:
+            return json.dumps(result["data"])
+        elif result["status_code"] == 404:
+            return _error_response(f"Mission not found: {mission_uuid}")
+        elif result["status_code"] == 400:
+            return _error_response(
+                result["data"].get(
+                    "detail",
+                    "Mission escalation is only available after at least one proof rejection",
+                )
+            )
+        elif result["status_code"] == 409:
+            return _error_response(
+                result["data"].get("detail", "An escalation is already open for this mission")
             )
         elif result["status_code"] == 401:
             return _error_response("Unauthorized: Invalid API key")
