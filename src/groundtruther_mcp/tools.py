@@ -22,6 +22,7 @@ async def post_mission(
     lng: Optional[float] = None,
     radius_mi: Optional[float] = None,
     template_id: Optional[str] = None,
+    auto_approve_min_tier: Optional[int] = None,
 ) -> str:
     """
     Create a new mission.
@@ -73,6 +74,8 @@ async def post_mission(
             payload["radius_mi"] = radius_mi
         if template_id:
             payload["template_id"] = template_id
+        if auto_approve_min_tier is not None:
+            payload["auto_approve_min_tier"] = auto_approve_min_tier
 
         # Make API call
         response = await client.post("/tasks/", data=payload)
@@ -460,7 +463,7 @@ async def cancel_mission(mission_uuid: str, reason: Optional[str] = None) -> str
     """
     Cancel a mission.
 
-    For OPEN or CLAIMED missions, cancellation is immediate and escrow is refunded.
+    For OPEN or CLAIMED missions, cancellation is immediate and reserved funds are refunded.
     For IN_PROGRESS missions, this requests mutual cancellation from the worker
     (returns 202 Accepted while waiting for worker consent).
 
@@ -590,7 +593,7 @@ async def respond_to_cancellation(mission_uuid: str, action: str, reason: Option
     Approve or decline a worker's cancellation/drop request.
 
     When a worker requests to drop a mission, the agent must approve or decline.
-    Approving cancels the mission and refunds escrow. Declining keeps the mission active.
+    Approving cancels the mission and refunds reserved funds. Declining keeps the mission active.
 
     Args:
         mission_uuid: Mission UUID
@@ -704,6 +707,104 @@ async def get_categories() -> str:
 
         if result["status_code"] == 200:
             return json.dumps(result["data"])
+        else:
+            return _error_response(
+                f"API error (HTTP {result['status_code']}): {result['data']}"
+            )
+
+    except httpx.RequestError as e:
+        return _error_response(f"Network error: {str(e)}")
+    except Exception as e:
+        return _error_response(f"Unexpected error: {str(e)}")
+
+
+async def list_pending_claim_requests(mission_uuid: Optional[str] = None) -> str:
+    """
+    List pending claim requests waiting on your decision.
+
+    Args:
+        mission_uuid: If provided, filter to one mission. Otherwise, return
+            pending requests across every mission you've created.
+
+    Returns:
+        JSON string with paginated results or error
+    """
+    try:
+        client = APIClient()
+        params: Dict[str, Any] = {}
+        if mission_uuid:
+            params["mission_uuid"] = mission_uuid
+
+        response = await client.get("/agent/claim-requests/", params=params)
+        result = APIClient.handle_response(response)
+
+        if result["status_code"] == 200:
+            return json.dumps(result["data"])
+        elif result["status_code"] == 401:
+            return _error_response("Unauthorized: Invalid API key")
+        elif result["status_code"] == 403:
+            return _error_response(
+                result["data"].get("detail", "Not authorized to list claim requests.")
+            )
+        else:
+            return _error_response(
+                f"API error (HTTP {result['status_code']}): {result['data']}"
+            )
+
+    except httpx.RequestError as e:
+        return _error_response(f"Network error: {str(e)}")
+    except Exception as e:
+        return _error_response(f"Unexpected error: {str(e)}")
+
+
+async def respond_to_claim_request(
+    mission_uuid: str,
+    request_id: str,
+    action: str,
+    decline_reason: Optional[str] = None,
+) -> str:
+    """
+    Approve or decline a worker's pending claim request.
+
+    Args:
+        mission_uuid: Mission UUID the request belongs to
+        request_id: ClaimRequest UUID
+        action: 'approve' or 'decline'
+        decline_reason: Optional reason (used only when declining)
+
+    Returns:
+        JSON string with the updated mission (on approve) or claim request
+        (on decline), or an error.
+    """
+    if action not in ("approve", "decline"):
+        return _error_response("Action must be 'approve' or 'decline'")
+
+    try:
+        client = APIClient()
+        payload: Dict[str, Any] = {}
+        if action == "decline" and decline_reason:
+            payload["decline_reason"] = decline_reason
+
+        response = await client.post(
+            f"/tasks/{mission_uuid}/claim-requests/{request_id}/{action}/",
+            data=payload,
+        )
+        result = APIClient.handle_response(response)
+
+        if result["status_code"] == 200:
+            return json.dumps(result["data"])
+        elif result["status_code"] == 404:
+            return _error_response("Claim request not found.")
+        elif result["status_code"] == 409:
+            return _error_response(
+                result["data"].get("detail", "Claim request is no longer pending.")
+            )
+        elif result["status_code"] == 400:
+            return _error_response(
+                f"Bad request: {result['data']}"
+            )
+        elif result["status_code"] == 401:
+            return _error_response("Unauthorized: Invalid API key")
         else:
             return _error_response(
                 f"API error (HTTP {result['status_code']}): {result['data']}"

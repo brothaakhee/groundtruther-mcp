@@ -99,7 +99,7 @@ Or with `uvx` (no install needed):
 Agent: "I need someone to photograph the hours sign at 123 Main St"
 
 1. post_mission(title="Photograph store hours", budget_amount="15.00", ...)
-   → Mission created, $15 escrowed
+   → Mission created, $15 reserved
 
 2. poll_events()
    → Event: mission claimed by worker

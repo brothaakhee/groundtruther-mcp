@@ -84,12 +84,13 @@ class TestPostMission:
             result = await post_mission(
                 title="Find a coffee shop",
                 description="Find a good coffee shop near downtown",
-                lat=40.7128,
-                lng=-74.0060,
-                radius_mi=5.0,
                 deadline=(datetime.now() + timedelta(days=7)).isoformat(),
                 budget_amount=50.00,
                 category="location-based",
+                acceptance_contract='{"notes": "Find and photograph a coffee shop", "required_media": [{"type": "photo", "label": "Photo", "required": true}]}',
+                lat=40.7128,
+                lng=-74.0060,
+                radius_mi=5.0,
                 template_id=None,
             )
 
@@ -127,12 +128,13 @@ class TestPostMission:
             result = await post_mission(
                 title="Find a coffee shop",
                 description="Find a good coffee shop near downtown",
-                lat=40.7128,
-                lng=-74.0060,
-                radius_mi=5.0,
                 deadline=(datetime.now() + timedelta(days=7)).isoformat(),
                 budget_amount=50.00,
                 category="location-based",
+                acceptance_contract='{"notes": "Find and photograph a coffee shop", "required_media": [{"type": "photo", "label": "Photo", "required": true}]}',
+                lat=40.7128,
+                lng=-74.0060,
+                radius_mi=5.0,
                 template_id=template_uuid,
             )
 
@@ -157,12 +159,13 @@ class TestPostMission:
             result = await post_mission(
                 title="Expensive task",
                 description="This is too expensive",
-                lat=40.7128,
-                lng=-74.0060,
-                radius_mi=5.0,
                 deadline=(datetime.now() + timedelta(days=7)).isoformat(),
                 budget_amount=999.00,
                 category="location-based",
+                acceptance_contract='{"notes": "Do the task", "required_media": [{"type": "photo", "label": "Photo", "required": true}]}',
+                lat=40.7128,
+                lng=-74.0060,
+                radius_mi=5.0,
             )
 
             response = json.loads(result)
@@ -187,12 +190,13 @@ class TestPostMission:
             result = await post_mission(
                 title="",
                 description="Missing title",
-                lat=40.7128,
-                lng=-74.0060,
-                radius_mi=5.0,
                 deadline=(datetime.now() + timedelta(days=7)).isoformat(),
                 budget_amount=50.00,
                 category="location-based",
+                acceptance_contract='{"notes": "Do the task", "required_media": [{"type": "photo", "label": "Photo", "required": true}]}',
+                lat=40.7128,
+                lng=-74.0060,
+                radius_mi=5.0,
             )
 
             response = json.loads(result)
@@ -214,12 +218,13 @@ class TestPostMission:
             result = await post_mission(
                 title="Task",
                 description="Description",
-                lat=40.7128,
-                lng=-74.0060,
-                radius_mi=5.0,
                 deadline=(datetime.now() + timedelta(days=7)).isoformat(),
                 budget_amount=50.00,
                 category="location-based",
+                acceptance_contract='{"notes": "Do the task", "required_media": [{"type": "photo", "label": "Photo", "required": true}]}',
+                lat=40.7128,
+                lng=-74.0060,
+                radius_mi=5.0,
             )
 
             response = json.loads(result)
@@ -1498,3 +1503,187 @@ class TestPostMissionExtended:
         response = json.loads(result)
         assert "error" in response
         assert "valid JSON" in response["error"]
+
+
+class TestPostMissionAutoApprove:
+    """Tests for the auto_approve_min_tier extension on post_mission."""
+
+    @pytest.mark.asyncio
+    async def test_post_mission_forwards_auto_approve_min_tier(self, mission_uuid):
+        from groundtruther_mcp.tools import post_mission
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_response = MagicMock()
+            mock_response.status_code = 201
+            mock_response.json.return_value = {"id": mission_uuid, "status": "OPEN"}
+            mock_client.post.return_value = mock_response
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+
+            result = await post_mission(
+                title="Auto-approve mission",
+                description="A trusted-worker auto-approve mission",
+                deadline=(datetime.now() + timedelta(days=2)).isoformat(),
+                budget_amount=12.00,
+                category="DIGITAL_REMOTE",
+                acceptance_contract='{"notes": "Quick check", "required_fields": [{"key": "result", "type": "text", "label": "Result", "required": true}]}',
+                auto_approve_min_tier=2,
+            )
+
+            payload = mock_client.post.call_args[1]["json"]
+            assert payload.get("auto_approve_min_tier") == 2
+
+            response = json.loads(result)
+            assert response["id"] == mission_uuid
+
+    @pytest.mark.asyncio
+    async def test_post_mission_omits_auto_approve_when_none(self, mission_uuid):
+        from groundtruther_mcp.tools import post_mission
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_response = MagicMock()
+            mock_response.status_code = 201
+            mock_response.json.return_value = {"id": mission_uuid, "status": "OPEN"}
+            mock_client.post.return_value = mock_response
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+
+            await post_mission(
+                title="No-auto-approve mission",
+                description="Every claim is reviewed by the agent",
+                deadline=(datetime.now() + timedelta(days=2)).isoformat(),
+                budget_amount=12.00,
+                category="DIGITAL_REMOTE",
+                acceptance_contract='{"notes": "Quick", "required_fields": [{"key": "x", "type": "text", "label": "X", "required": true}]}',
+            )
+
+            payload = mock_client.post.call_args[1]["json"]
+            # The key is intentionally omitted so the backend default
+            # (null = no auto-approve) takes effect.
+            assert "auto_approve_min_tier" not in payload
+
+
+class TestListPendingClaimRequests:
+    """Tests for the list_pending_claim_requests tool."""
+
+    @pytest.mark.asyncio
+    async def test_list_no_filter_calls_agent_endpoint(self):
+        from groundtruther_mcp.tools import list_pending_claim_requests
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {"results": [], "next": None, "previous": None}
+            mock_client.get.return_value = mock_response
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+
+            result = await list_pending_claim_requests()
+
+            call_args = mock_client.get.call_args
+            url = call_args[0][0]
+            params = call_args[1].get("params") or {}
+            assert "/agent/claim-requests/" in url
+            assert "mission_uuid" not in params
+
+            response = json.loads(result)
+            assert "results" in response
+
+    @pytest.mark.asyncio
+    async def test_list_with_mission_uuid_filters(self, mission_uuid):
+        from groundtruther_mcp.tools import list_pending_claim_requests
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {"results": [{"id": "abc"}], "next": None, "previous": None}
+            mock_client.get.return_value = mock_response
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+
+            await list_pending_claim_requests(mission_uuid=mission_uuid)
+
+            call_args = mock_client.get.call_args
+            params = call_args[1].get("params") or {}
+            assert params.get("mission_uuid") == mission_uuid
+
+
+class TestRespondToClaimRequest:
+    """Tests for the respond_to_claim_request tool."""
+
+    @pytest.mark.asyncio
+    async def test_approve_calls_approve_endpoint(self, mission_uuid):
+        from groundtruther_mcp.tools import respond_to_claim_request
+        request_id = "11111111-1111-1111-1111-111111111111"
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {"id": mission_uuid, "status": "CLAIMED"}
+            mock_client.post.return_value = mock_response
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+
+            result = await respond_to_claim_request(
+                mission_uuid=mission_uuid, request_id=request_id, action="approve",
+            )
+
+            url = mock_client.post.call_args[0][0]
+            assert f"/tasks/{mission_uuid}/claim-requests/{request_id}/approve/" in url
+
+            response = json.loads(result)
+            assert response["status"] == "CLAIMED"
+
+    @pytest.mark.asyncio
+    async def test_decline_calls_decline_endpoint_with_reason(self, mission_uuid):
+        from groundtruther_mcp.tools import respond_to_claim_request
+        request_id = "22222222-2222-2222-2222-222222222222"
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {"id": request_id, "status": "declined"}
+            mock_client.post.return_value = mock_response
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+
+            await respond_to_claim_request(
+                mission_uuid=mission_uuid, request_id=request_id,
+                action="decline", decline_reason="Need someone closer.",
+            )
+
+            call_args = mock_client.post.call_args
+            url = call_args[0][0]
+            payload = call_args[1].get("json") or {}
+            assert f"/tasks/{mission_uuid}/claim-requests/{request_id}/decline/" in url
+            assert payload.get("decline_reason") == "Need someone closer."
+
+    @pytest.mark.asyncio
+    async def test_decline_without_reason_omits_field(self, mission_uuid):
+        from groundtruther_mcp.tools import respond_to_claim_request
+        request_id = "33333333-3333-3333-3333-333333333333"
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {"id": request_id, "status": "declined"}
+            mock_client.post.return_value = mock_response
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+
+            await respond_to_claim_request(
+                mission_uuid=mission_uuid, request_id=request_id, action="decline",
+            )
+            payload = mock_client.post.call_args[1].get("json") or {}
+            assert "decline_reason" not in payload or payload["decline_reason"] == ""
+
+    @pytest.mark.asyncio
+    async def test_invalid_action_returns_error(self, mission_uuid):
+        from groundtruther_mcp.tools import respond_to_claim_request
+        request_id = "44444444-4444-4444-4444-444444444444"
+
+        result = await respond_to_claim_request(
+            mission_uuid=mission_uuid, request_id=request_id, action="archive",
+        )
+        response = json.loads(result)
+        assert "error" in response
