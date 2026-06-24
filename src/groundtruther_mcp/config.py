@@ -12,6 +12,11 @@ class Config:
     # API base URL from environment variable, default to localhost
     API_BASE_URL: str = os.getenv("GT_API_URL", "http://localhost:8000/api/v1")
 
+    # On-chain escrow (optional). When enabled and a payer key is configured, escrow tools sign
+    # client-side (Mode A). The payer secret key NEVER leaves this process.
+    GT_ESCROW_ENABLED: bool = os.getenv("GT_ESCROW_ENABLED", "false").lower() in ("1", "true", "yes")
+    GT_SOLANA_PAYER_SK: Optional[str] = os.getenv("GT_SOLANA_PAYER_SK")
+
     # Server configuration
     SERVER_NAME: str = "groundtruther"
     SERVER_DESCRIPTION: str = "MCP server for GroundTruther marketplace"

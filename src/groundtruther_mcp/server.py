@@ -23,6 +23,15 @@ from .tools import (
     list_pending_claim_requests,
     respond_to_claim_request,
 )
+from .tools_escrow import (
+    post_mission_onchain,
+    get_mission_status,
+    release_mission,
+    dispute_mission,
+    cancel_escrow_mission,
+    assign_worker as assign_worker_escrow,
+    submit_signed_mission,
+)
 
 
 def main():
@@ -709,6 +718,63 @@ def main():
             action=action,
             decline_reason=decline_reason,
         )
+
+    # ---- On-chain escrow tools (keyless; sign locally with GT_SOLANA_PAYER_SK, which never leaves
+    # this process). The backend builds unsigned/partial-signed txs; these sign + submit them. ----
+    @mcp.tool(name="post_mission_onchain")
+    async def post_mission_onchain_tool(
+        title: str, description: str, deadline: str, budget_amount: float, category: str,
+        acceptance_contract: str, lat: float = None, lng: float = None, radius_mi: float = None,
+        template_id: str = None, payer_pubkey: str = None, auto_claim: bool = False,
+        claim_window_secs: int = None, idempotency_key: str = None,
+    ) -> str:
+        """Create an on-chain USDC escrow mission. Builds an unsigned fund transaction server-side,
+        signs it locally with your payer key (which never leaves this machine), and submits it. With
+        no key configured, returns the unsigned tx for an external wallet. Requires GT_SOLANA_PAYER_SK
+        for one-call funding. Same content fields as post_mission."""
+        return await post_mission_onchain(
+            title=title, description=description, deadline=deadline, budget_amount=budget_amount,
+            category=category, acceptance_contract=acceptance_contract, lat=lat, lng=lng,
+            radius_mi=radius_mi, template_id=template_id, payer_pubkey=payer_pubkey,
+            auto_claim=auto_claim, claim_window_secs=claim_window_secs, idempotency_key=idempotency_key)
+
+    @mcp.tool(name="get_mission_status")
+    async def get_mission_status_tool(task_id: str, refresh: bool = False) -> str:
+        """Get an on-chain mission's status (onchain_status, deadlines, events). refresh=True forces
+        a chain re-sync first."""
+        return await get_mission_status(task_id=task_id, refresh=refresh)
+
+    @mcp.tool(name="release_mission")
+    async def release_mission_tool(task_id: str) -> str:
+        """Release the escrow to the worker (you pay them + GT's fee). Builds an unsigned release tx,
+        signs it locally with your payer key, submits it. Requires GT_SOLANA_PAYER_SK."""
+        return await release_mission(task_id=task_id)
+
+    @mcp.tool(name="dispute_mission")
+    async def dispute_mission_tool(task_id: str) -> str:
+        """Dispute submitted proof during the review window (pauses auto-release; a GT arbiter then
+        decides). Signs locally with your payer key. Requires GT_SOLANA_PAYER_SK."""
+        return await dispute_mission(task_id=task_id)
+
+    @mcp.tool(name="cancel_escrow_mission")
+    async def cancel_escrow_mission_tool(task_id: str) -> str:
+        """Cancel an unassigned funded mission and refund yourself immediately. Signs locally with
+        your payer key. Requires GT_SOLANA_PAYER_SK."""
+        return await cancel_escrow_mission(task_id=task_id)
+
+    @mcp.tool(name="assign_worker_onchain")
+    async def assign_worker_onchain_tool(task_id: str, worker_user_id: str, worker_pubkey: str,
+                                         worker_payout_owner: str, claim_request_id: str = None) -> str:
+        """Approve a worker for an on-chain mission (GT co-signs the fee; you co-sign as payer). Signs
+        locally with your payer key. Requires GT_SOLANA_PAYER_SK."""
+        return await assign_worker_escrow(
+            task_id=task_id, worker_user_id=worker_user_id, worker_pubkey=worker_pubkey,
+            worker_payout_owner=worker_payout_owner, claim_request_id=claim_request_id)
+
+    @mcp.tool(name="submit_signed_mission")
+    async def submit_signed_mission_tool(task_id: str, signed_tx_base64: str) -> str:
+        """Mode-B fund completion: submit a fund transaction you signed with an external wallet."""
+        return await submit_signed_mission(task_id=task_id, signed_tx_base64=signed_tx_base64)
 
     # Run the server with stdio transport
     mcp.run(transport="stdio")
