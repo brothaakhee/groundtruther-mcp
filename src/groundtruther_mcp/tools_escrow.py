@@ -105,11 +105,31 @@ async def _build_sign_submit(task_id: str, build_path: str, kind: str) -> str:
 
 
 async def release_mission(task_id: str) -> str:
+    """Pays the worker and closes the mission. Works during review, AND from a dispute you raised —
+    releasing a disputed mission withdraws the dispute and pays the worker ('we worked it out'). This
+    is the cooperative resolution that avoids arbitration."""
     return await _build_sign_submit(task_id, "release", "release")
 
 
 async def dispute_mission(task_id: str) -> str:
     return await _build_sign_submit(task_id, "dispute", "dispute")
+
+
+async def escalate_mission(task_id: str) -> str:
+    """Request GroundTruther arbitration on a disputed mission (off-chain, no tx to sign). DISPUTED-only;
+    surfaces the backend detail on 409 (already escalated / not disputed)."""
+    try:
+        client = APIClient()
+        res = APIClient.handle_response(
+            await client.post(f"/escrow/missions/{task_id}/escalate/", data={}))
+        if res["status_code"] != 200:
+            detail = res["data"].get("detail") if isinstance(res["data"], dict) else res["data"]
+            return _error_response(f"escalate failed (HTTP {res['status_code']}): {detail}")
+        return json.dumps(res["data"])
+    except httpx.RequestError as e:
+        return _error_response(f"Network error: {e}")
+    except Exception as e:  # noqa: BLE001
+        return _error_response(f"Unexpected error: {e}")
 
 
 async def cancel_escrow_mission(task_id: str) -> str:

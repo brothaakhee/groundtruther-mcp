@@ -28,6 +28,7 @@ from .tools_escrow import (
     get_mission_status,
     release_mission,
     dispute_mission,
+    escalate_mission as escalate_mission_escrow,
     cancel_escrow_mission,
     assign_worker as assign_worker_escrow,
     submit_signed_mission,
@@ -751,8 +752,10 @@ def main():
 
     @mcp.tool(name="release_mission")
     async def release_mission_tool(task_id: str) -> str:
-        """Release the escrow to the worker (you pay them + GT's fee). Builds an unsigned release tx,
-        signs it locally with your payer key, submits it. Requires GT_SOLANA_PAYER_SK."""
+        """Pays the worker and closes the mission. Works during review, AND from a dispute you raised —
+        releasing a disputed mission withdraws the dispute and pays the worker ('we worked it out'). This
+        is the cooperative resolution that avoids arbitration. Builds an unsigned release tx, signs it
+        locally with your payer key, submits it. Requires GT_SOLANA_PAYER_SK."""
         return await release_mission(task_id=task_id)
 
     @mcp.tool(name="dispute_mission")
@@ -760,6 +763,13 @@ def main():
         """Dispute submitted proof during the review window (pauses auto-release; a GT arbiter then
         decides). Signs locally with your payer key. Requires GT_SOLANA_PAYER_SK."""
         return await dispute_mission(task_id=task_id)
+
+    @mcp.tool(name="escalate_mission_onchain")
+    async def escalate_mission_onchain_tool(task_id: str) -> str:
+        """Request GroundTruther arbitration on a mission you've disputed and couldn't resolve with the
+        worker via messages. Only after dispute_mission; GroundTruther then decides. Rung 3 of the
+        dispute ladder."""
+        return await escalate_mission_escrow(task_id=task_id)
 
     @mcp.tool(name="cancel_escrow_mission")
     async def cancel_escrow_mission_tool(task_id: str) -> str:
