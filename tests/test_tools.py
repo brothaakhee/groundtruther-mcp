@@ -230,6 +230,100 @@ class TestPostMission:
             response = json.loads(result)
             assert "error" in response
 
+    @pytest.mark.asyncio
+    async def test_post_task_with_drop_grace_secs(self, api_key, api_base_url, mission_uuid):
+        """Test drop_grace_secs is passed through in the create payload."""
+        from groundtruther_mcp.tools import post_mission
+
+        response_data = {"id": mission_uuid, "status": "OPEN"}
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_response = MagicMock()
+            mock_response.status_code = 201
+            mock_response.json.return_value = response_data
+            mock_client.post.return_value = mock_response
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+
+            result = await post_mission(
+                title="Find a coffee shop",
+                description="Find a good coffee shop near downtown",
+                deadline=(datetime.now() + timedelta(days=7)).isoformat(),
+                budget_amount=50.00,
+                category="location-based",
+                acceptance_contract='{"notes": "Do the task", "required_media": [{"type": "photo", "label": "Photo", "required": true}]}',
+                lat=40.7128,
+                lng=-74.0060,
+                radius_mi=5.0,
+                drop_grace_secs=5400,
+            )
+
+            # Verify drop_grace_secs made it into the request body
+            call_args = mock_client.post.call_args
+            assert call_args[1]["json"]["drop_grace_secs"] == 5400
+
+            response = json.loads(result)
+            assert response["id"] == mission_uuid
+
+    @pytest.mark.asyncio
+    async def test_post_task_omits_drop_grace_secs_when_unset(self, api_key, api_base_url, mission_uuid):
+        """Test drop_grace_secs is absent from the payload when not provided (server default applies)."""
+        from groundtruther_mcp.tools import post_mission
+
+        response_data = {"id": mission_uuid, "status": "OPEN"}
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_response = MagicMock()
+            mock_response.status_code = 201
+            mock_response.json.return_value = response_data
+            mock_client.post.return_value = mock_response
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+
+            await post_mission(
+                title="Find a coffee shop",
+                description="Find a good coffee shop near downtown",
+                deadline=(datetime.now() + timedelta(days=7)).isoformat(),
+                budget_amount=50.00,
+                category="location-based",
+                acceptance_contract='{"notes": "Do the task", "required_media": [{"type": "photo", "label": "Photo", "required": true}]}',
+                lat=40.7128,
+                lng=-74.0060,
+                radius_mi=5.0,
+            )
+
+            call_args = mock_client.post.call_args
+            assert "drop_grace_secs" not in call_args[1]["json"]
+
+    @pytest.mark.asyncio
+    async def test_post_task_drop_grace_secs_below_minimum(self, api_key, api_base_url):
+        """Test drop_grace_secs below 3600 is rejected client-side without an API call."""
+        from groundtruther_mcp.tools import post_mission
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+
+            result = await post_mission(
+                title="Find a coffee shop",
+                description="Find a good coffee shop near downtown",
+                deadline=(datetime.now() + timedelta(days=7)).isoformat(),
+                budget_amount=50.00,
+                category="location-based",
+                acceptance_contract='{"notes": "Do the task", "required_media": [{"type": "photo", "label": "Photo", "required": true}]}',
+                lat=40.7128,
+                lng=-74.0060,
+                radius_mi=5.0,
+                drop_grace_secs=1800,
+            )
+
+            # No API call should be made — rejected locally
+            mock_client.post.assert_not_called()
+
+            response = json.loads(result)
+            assert "error" in response
+            assert "3600" in response["error"]
+
 
 class TestCheckMissionStatus:
     """Tests for check_task_status tool."""

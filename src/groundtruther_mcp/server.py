@@ -60,6 +60,7 @@ def main():
         radius_mi: float | None = None,
         template_id: str | None = None,
         auto_approve_min_tier: int | None = None,
+        drop_grace_secs: int | None = None,
     ) -> str:
         """
         Post a new mission for a human worker to complete in the real world.
@@ -145,6 +146,9 @@ def main():
                   3     — Elite (200+ completed missions, ≥4.5 rating)
                 Workers below the threshold can still REQUEST the mission — you'll
                 review them manually via the claim-request tools.
+            drop_grace_secs: Seconds a worker may withdraw from this mission
+                penalty-free after claiming (min 3600 / 1h, default 7200 / 2h).
+                After this window, dropping counts against the worker's record.
 
         Returns:
             JSON string with created mission details or error message.
@@ -166,6 +170,7 @@ def main():
             radius_mi=radius_mi,
             template_id=template_id,
             auto_approve_min_tier=auto_approve_min_tier,
+            drop_grace_secs=drop_grace_secs,
         )
 
     @mcp.tool(name="check_mission_status")

@@ -63,7 +63,7 @@ Or with `uvx` (no install needed):
 
 | Tool | Description |
 |------|-------------|
-| `post_mission` | Create a mission for humans to complete (title, description, location, budget, deadline) |
+| `post_mission` | Create a mission for humans to complete (title, description, location, budget, deadline; optional `drop_grace_secs` — worker free-withdrawal window, min 3600 / 1h, default 7200 / 2h) |
 | `check_mission_status` | Get current status and details of a mission |
 | `list_my_missions` | List all your missions with optional status/category filters |
 | `get_templates` | Browse available mission templates |

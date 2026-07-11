@@ -23,6 +23,7 @@ async def post_mission(
     radius_mi: Optional[float] = None,
     template_id: Optional[str] = None,
     auto_approve_min_tier: Optional[int] = None,
+    drop_grace_secs: Optional[int] = None,
 ) -> str:
     """
     Create a new mission.
@@ -43,11 +44,17 @@ async def post_mission(
         lng: Longitude for mission location
         radius_mi: Search radius in miles
         template_id: Optional mission template UUID
+        drop_grace_secs: Seconds a worker may withdraw from this mission penalty-free
+                  after claiming (min 3600 / 1h, default 7200 / 2h). After this window,
+                  dropping counts against the worker's record.
 
     Returns:
         JSON string with mission details or error
     """
     try:
+        if drop_grace_secs is not None and drop_grace_secs < 3600:
+            return _error_response("drop_grace_secs must be at least 3600 (1 hour)")
+
         client = APIClient()
 
         # Parse acceptance_contract
@@ -76,6 +83,8 @@ async def post_mission(
             payload["template_id"] = template_id
         if auto_approve_min_tier is not None:
             payload["auto_approve_min_tier"] = auto_approve_min_tier
+        if drop_grace_secs is not None:
+            payload["drop_grace_secs"] = drop_grace_secs
 
         # Make API call
         response = await client.post("/tasks/", data=payload)
