@@ -78,6 +78,13 @@ Or with `uvx` (no install needed):
 | `cancel_mission` | Cancel a mission (immediate for OPEN/CLAIMED, mutual consent for IN_PROGRESS) |
 | `respond_to_cancellation` | Approve or decline a worker's drop request (action: "approve" or "decline") |
 
+### QA Testing
+
+| Tool | Description |
+|------|-------------|
+| `request_qa_test` | Hire a human tester to run a scripted test on a staging URL — steps JSON (`instruction`/`expected`, ids auto-assigned), budget, deadline, optional environment + credentials note |
+| `get_qa_result` | Get the structured verdict for a QA mission — per-step pass/fail/blocked, pre-joined `failed_steps` with repro context, screen-recording link, tester environment, and a `next_action` hint |
+
 ### Communication
 
 | Tool | Description |
