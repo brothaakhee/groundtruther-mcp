@@ -415,7 +415,7 @@ def main():
         Also marks any unread messages from the worker as read.
 
         Check messages when:
-        - You receive a mission.message.received event from poll_events
+        - You receive a message_received event from poll_events
         - Before approving or rejecting proof — the worker may have added context
         - When a mission seems stalled — the worker may have asked a question you missed
 
@@ -467,19 +467,23 @@ def main():
         """
         Poll for new events on your missions.
 
-        Returns events like mission_claimed, proof_submitted, mission.message.received,
+        Returns events like claim_request_received, task_claimed, proof_submitted,
         and others. Use this to stay informed about mission progress without repeatedly
         checking each mission individually.
 
-        Event types:
-        - mission_claimed: A worker picked up your mission — it's starting
-        - mission_started: Worker marked the mission as in progress
+        Event types (as returned in each event's event_type field):
+        - claim_request_received: A worker requested to claim your mission and is
+          waiting for YOUR approval — respond promptly via
+          respond_to_claim_request (the mission is stalled until you do)
+        - task_claimed: A worker was approved / picked up your mission — it's starting
+        - task_started: Worker marked the mission as in progress
         - proof_submitted: Worker submitted proof — you should review it promptly
-        - mission_completed: Mission was approved and finalized
-        - mission_cancelled: Mission was cancelled
-        - mission_expired: Deadline passed without completion
-        - mission_dropped: Worker abandoned the mission — it returns to OPEN
-        - mission.message.received: Worker sent you a message — check and respond
+        - task_approved / review_pending: Mission was approved and finalized —
+          leave a review
+        - task_cancelled: Mission was cancelled
+        - task_expired: Deadline passed without completion
+        - task_dropped: Worker abandoned the mission — it returns to OPEN
+        - message_received: Worker sent you a message — check and respond
 
         POLLING STRATEGY — You should set up regular polling to stay responsive:
         - During active missions (CLAIMED/IN_PROGRESS): poll frequently, ideally every
@@ -760,6 +764,12 @@ def main():
         - 1-30 steps. A focused 5-10 step script gets faster, better runs than a
           30-step marathon.
 
+        THE APPROVAL GATE: A tester "claiming" your mission is a claim REQUEST you
+        must approve before they can start (unless auto-approval applies). Watch
+        for get_qa_result status=claim_requested (or a claim_request_received
+        event from poll_events) and respond promptly via respond_to_claim_request
+        — the test is stalled until you do.
+
         THE RESULT: Poll get_qa_result(task_id) for the outcome. The tester's verdict
         is validated server-side against your script (step ids must match, non-pass
         steps require an 'observed' note) and the recording link is mandatory, so
@@ -802,19 +812,28 @@ def main():
 
         Returns everything you need to act on the outcome without further calls:
 
-        - status: pending | claimed | in_progress | awaiting_review | completed |
-          rejected (plus terminal states: disputed, cancelled, expired)
+        - status: pending | claim_requested | claimed | in_progress |
+          awaiting_review | completed | rejected (plus terminal states:
+          disputed, cancelled, expired)
+        - pending_claim_requests: when status=claim_requested, the request ids
+          waiting on YOUR approve/decline (respond_to_claim_request) — the test
+          cannot start until you respond
         - overall_verdict: pass | fail | blocked (once the tester has submitted)
         - steps: the full per-step view — each step joined with its verdict and the
           tester's 'observed' note
         - failed_steps: just the failures, pre-joined with instruction + expected +
           observed so you have immediate repro context for fixing
+        - blocked_steps: same pre-joined shape for blocked steps — what stopped
+          the tester (access, environment, outage) with their observed note
         - recording_url: link to the tester's screen recording of the run
         - tester_environment: browser/OS the tester used
         - notes: the tester's free-text summary
-        - next_action: what to do now (e.g. approve, fix and re-request, wait)
+        - next_action: what to do now (e.g. approve a claim request, approve the
+          result, fix and re-request, wait)
 
         ACTING ON RESULTS:
+        - status=claim_requested: a tester wants the mission — approve or decline
+          promptly via respond_to_claim_request; they may be available right now.
         - verdict=pass + awaiting_review: verify the recording, then approve_mission
           to pay the tester (and submit_review right after).
         - verdict=fail: the fail report IS the deliverable — approve it, then fix the

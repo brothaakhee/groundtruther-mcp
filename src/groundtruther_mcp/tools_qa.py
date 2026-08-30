@@ -19,7 +19,9 @@ MAX_CONTRACT_NOTES_CHARS = 2000
 
 # Task status -> agent-facing QA status. IN_PROGRESS is special-cased: with a
 # proof already on file it means the last submission was rejected (rejection
-# returns the mission to IN_PROGRESS for resubmission).
+# returns the mission to IN_PROGRESS for resubmission). An OPEN/CLAIMED task
+# with pending claim requests is additionally escalated to "claim_requested"
+# (the approval gate needs the requesting agent's action).
 _STATUS_MAP = {
     "OPEN": "pending",
     "CLAIMED": "claimed",
@@ -30,6 +32,11 @@ _STATUS_MAP = {
     "CANCELLED": "cancelled",
     "EXPIRED": "expired",
 }
+
+
+def _agent_status(raw_status: Optional[str]) -> str:
+    """Map a raw task status to the lowercase agent-facing QA status."""
+    return _STATUS_MAP.get(raw_status, (raw_status or "unknown").lower())
 
 
 def _validate_staging_url(staging_url: str) -> Optional[str]:
@@ -241,11 +248,16 @@ async def request_qa_test(
             data = result["data"]
             return json.dumps({
                 "task_id": data.get("id"),
-                "status": data.get("status"),
+                # Same lowercase status vocabulary as get_qa_result ("pending", …).
+                "status": _agent_status(data.get("status")),
                 "next": (
-                    "A human tester will claim the mission, run the script on the "
-                    "staging URL, and submit a screen recording plus per-step verdicts "
-                    "— poll get_qa_result(task_id) for the outcome."
+                    "A human tester will request to claim the mission; unless "
+                    "auto-approval applies you must approve their claim request "
+                    "(watch for status=claim_requested from get_qa_result, or a "
+                    "claim_request_received event from poll_events, then call "
+                    "respond_to_claim_request). The tester then runs the script "
+                    "and submits a screen recording plus per-step verdicts — poll "
+                    "get_qa_result(task_id) for the outcome."
                 ),
             })
         elif result["status_code"] == 402:
@@ -286,16 +298,19 @@ def _recording_url(proof: Dict[str, Any]) -> Optional[str]:
 
 def _join_steps(
     qa_script: Dict[str, Any], qa_result: Dict[str, Any]
-) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
     """
     Join the script's steps (instruction/expected) with the tester's result steps
-    (verdict/observed). Returns (all_steps, failed_steps).
+    (verdict/observed). Returns (all_steps, failed_steps, blocked_steps) —
+    failed_steps stays fail-only (its name is a compat contract); blocked steps
+    get their own mirror list so the blocker context is directly consumable.
     """
     script_by_id = {
         s.get("id"): s for s in qa_script.get("steps", []) if isinstance(s, dict)
     }
     joined: List[Dict[str, Any]] = []
     failed: List[Dict[str, Any]] = []
+    blocked: List[Dict[str, Any]] = []
     for result_step in qa_result.get("steps", []):
         if not isinstance(result_step, dict):
             continue
@@ -310,20 +325,54 @@ def _join_steps(
         if result_step.get("observed") is not None:
             entry["observed"] = result_step["observed"]
         joined.append(entry)
-        if entry["verdict"] == "fail":
-            failed.append({
+        if entry["verdict"] in ("fail", "blocked"):
+            detail = {
                 "id": entry["id"],
                 "instruction": entry["instruction"],
                 "expected": entry["expected"],
                 "observed": result_step.get("observed"),
-            })
-    return joined, failed
+            }
+            (failed if entry["verdict"] == "fail" else blocked).append(detail)
+    return joined, failed, blocked
+
+
+async def _pending_claim_requests(client: APIClient, task_id: str) -> List[Dict[str, Any]]:
+    """Best-effort fetch of pending claim requests on a mission (empty on any failure).
+
+    Used to surface the approval gate: an OPEN mission with a pending request is
+    waiting on the REQUESTING AGENT, not on a tester.
+    """
+    try:
+        response = await client.get(
+            "/agent/claim-requests/", params={"mission_uuid": task_id}
+        )
+        result = APIClient.handle_response(response)
+        if result["status_code"] != 200:
+            return []
+        data = result["data"]
+        rows = data.get("results") if isinstance(data, dict) else data
+        if not isinstance(rows, list):
+            return []
+        return [r for r in rows if isinstance(r, dict) and r.get("status") == "pending"]
+    except Exception:  # noqa: BLE001 — never fail the status read on the CR lookup
+        return []
 
 
 def _next_action(status: str, verdict: Optional[str]) -> str:
     """Compose the one-line 'what to do now' hint for the requesting agent."""
     if status == "pending":
-        return "waiting for a tester to claim the mission — check back later or use poll_events"
+        return (
+            "waiting for a tester to request the mission — check back later or use "
+            "poll_events (a claim_request_received event means a tester wants in "
+            "and is waiting for YOUR approval)"
+        )
+    if status == "claim_requested":
+        return (
+            "a tester has requested to claim this mission and is waiting for YOUR "
+            "approval — review with list_pending_claim_requests(mission_uuid) and "
+            "respond via respond_to_claim_request(mission_uuid, request_id, "
+            "'approve' or 'decline'); the test cannot start until you respond"
+        )
     if status == "claimed":
         return "a tester has claimed the mission — the test run should begin shortly"
     if status == "in_progress":
@@ -378,9 +427,13 @@ async def get_qa_result(task_id: str) -> str:
     Get the structured result of a QA test mission.
 
     Fetches the mission and its latest proof, and returns an agent-consumable
-    summary: status, overall_verdict, joined per-step results, failed_steps
-    (pre-joined with instruction/expected/observed for repro context),
-    recording_url, tester_environment, notes, and a next_action hint.
+    summary: status, overall_verdict, joined per-step results, failed_steps and
+    blocked_steps (pre-joined with instruction/expected/observed for repro
+    context), recording_url, tester_environment, notes, and a next_action hint.
+
+    While the mission is unclaimed/claimed, pending tester claim requests are
+    surfaced as status "claim_requested" with a pending_claim_requests list —
+    the approval gate is on the requesting agent, not the tester.
 
     Args:
         task_id: UUID of a mission created via request_qa_test
@@ -419,13 +472,29 @@ async def get_qa_result(task_id: str) -> str:
             # Rejection returns the mission to IN_PROGRESS with the proof on file.
             status = "rejected"
         else:
-            status = _STATUS_MAP.get(raw_status, (raw_status or "unknown").lower())
+            status = _agent_status(raw_status)
 
         output: Dict[str, Any] = {
             "task_id": task.get("id"),
             "status": status,
             "failed_steps": [],
+            "blocked_steps": [],
         }
+
+        # Approval gate: an OPEN/CLAIMED mission with pending claim requests is
+        # waiting on the requesting agent's approve/decline, not on a tester.
+        if raw_status in ("OPEN", "CLAIMED"):
+            pending = await _pending_claim_requests(client, task_id)
+            if pending:
+                status = "claim_requested"
+                output["status"] = status
+                output["pending_claim_requests"] = [
+                    {
+                        "request_id": r.get("id"),
+                        "created_at": r.get("created_at"),
+                    }
+                    for r in pending
+                ]
 
         qa_result = None
         if latest is not None:
@@ -435,9 +504,10 @@ async def get_qa_result(task_id: str) -> str:
         if isinstance(qa_result, dict):
             verdict = qa_result.get("overall_verdict")
             output["overall_verdict"] = verdict
-            joined, failed = _join_steps(qa_script, qa_result)
+            joined, failed, blocked = _join_steps(qa_script, qa_result)
             output["steps"] = joined
             output["failed_steps"] = failed
+            output["blocked_steps"] = blocked
             if qa_result.get("tester_environment"):
                 output["tester_environment"] = qa_result["tester_environment"]
             if qa_result.get("notes"):

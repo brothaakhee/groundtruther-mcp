@@ -6,6 +6,64 @@
         "description": "API for the GroundTruther platform — task creation, agent management, worker workflows, and payments."
     },
     "paths": {
+        "/api/v1/agent/claim-requests/": {
+            "get": {
+                "operationId": "agent_claim_requests_list",
+                "description": "GET /api/v1/agent/claim-requests/ — pending requests across the agent's tasks.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "include_resolved",
+                        "schema": {
+                            "type": "boolean"
+                        },
+                        "description": "Include resolved rows"
+                    },
+                    {
+                        "in": "query",
+                        "name": "mission_uuid",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Optional mission UUID filter"
+                    },
+                    {
+                        "in": "query",
+                        "name": "status",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter by status (default: pending)"
+                    }
+                ],
+                "tags": [
+                    "agent"
+                ],
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/ClaimRequestResponse"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/agents/": {
             "post": {
                 "operationId": "agent_create",
@@ -51,6 +109,169 @@
                             }
                         },
                         "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/agents/check-name/": {
+            "get": {
+                "operationId": "agents_check_name_retrieve",
+                "description": "Check if an agent name is available.",
+                "tags": [
+                    "agents"
+                ],
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/apple/": {
+            "post": {
+                "operationId": "auth_apple_create",
+                "description": "Verify Apple identity token and return JWT.\n\nAccepts identity_token from ASAuthorizationAppleIDCredential.\nfull_name and email are only sent on first sign-in (Apple does not\nresend them), so they are optional.",
+                "tags": [
+                    "auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AppleOAuthRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AppleOAuthRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AppleOAuthRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AppleOAuthResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/email/verify/confirm/": {
+            "post": {
+                "operationId": "auth_email_verify_confirm_create",
+                "description": "Verify a user's email using uidb64 + token from the verification link.\n\nOn success, marks email_verified=True and returns a JWT for auto-login.",
+                "tags": [
+                    "auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/EmailVerifyConfirmRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/EmailVerifyConfirmRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/EmailVerifyConfirmRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EmailVerifyConfirmResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/email/verify/send/": {
+            "post": {
+                "operationId": "auth_email_verify_send_create",
+                "description": "Send a verification email with a secure link.\n\nRate limited to 5 requests per user per hour.\nUses a custom token generator that includes email_verified in the hash\nso the token is single-use (invalidated once the user verifies).",
+                "tags": [
+                    "auth"
+                ],
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/EmailVerifySendResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "description": "No response body"
+                    },
+                    "429": {
+                        "description": "No response body"
                     }
                 }
             }
@@ -289,6 +510,115 @@
                 }
             }
         },
+        "/api/v1/auth/otp/send/": {
+            "post": {
+                "operationId": "auth_otp_send_create",
+                "description": "Send an OTP code to a phone number.\n\nRate limited to 5 requests per phone per hour.",
+                "tags": [
+                    "auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/OTPSendRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/OTPSendRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/OTPSendRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OTPSendResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "description": "No response body"
+                    },
+                    "429": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/otp/verify/": {
+            "post": {
+                "operationId": "auth_otp_verify_create",
+                "description": "Verify an OTP code for phone authentication.\n\nOn success, returns a JWT token and whether the user is new.",
+                "tags": [
+                    "auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/OTPVerifyRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/OTPVerifyRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/OTPVerifyRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OTPVerifyResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/v1/auth/password-reset/": {
             "post": {
                 "operationId": "auth_password_reset_create",
@@ -375,10 +705,66 @@
                 }
             }
         },
+        "/api/v1/auth/privy/": {
+            "post": {
+                "operationId": "auth_privy_create",
+                "description": "Exchange a Privy identity token for a Django access token (worker auth).\n\nPOST /api/v1/auth/privy/  body: {\"identity_token\": \"<jwt>\"}\n\nReturns 404 unless GT_PRIVY_APP_ID is configured (the endpoint effectively\ndoes not exist pre-setup), 401 on an invalid token, and otherwise mirrors\nLoginView's response shape: {\"access_token\", \"token_type\": \"bearer\"}.",
+                "tags": [
+                    "auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PrivyAuthRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PrivyAuthRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PrivyAuthRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PrivyAuthResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "description": "No response body"
+                    },
+                    "404": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/v1/auth/register/": {
             "post": {
                 "operationId": "auth_register_create",
-                "description": "Register a new user.\n\nArgs:\n    request: HTTP request with email, password, username, and optional role\n\nReturns:\n    201 Created with user data, or 400 Bad Request with errors",
+                "description": "Register a new user.\n\nAuto-generates username from email if not provided.\nSends a verification email after successful registration.\n\nArgs:\n    request: HTTP request with email, password, optional username, and optional role\n\nReturns:\n    201 Created with user data, or 400 Bad Request with errors",
                 "tags": [
                     "auth"
                 ],
@@ -428,6 +814,28 @@
                 }
             }
         },
+        "/api/v1/auth/test-verify-email/": {
+            "post": {
+                "operationId": "auth_test_verify_email_create",
+                "description": "DEV ONLY: Directly set email_verified=True. Disabled when DEBUG=False.",
+                "tags": [
+                    "auth"
+                ],
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/v1/auth/token/refresh/": {
             "post": {
                 "operationId": "auth_token_refresh_create",
@@ -453,6 +861,84 @@
                             }
                         },
                         "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/coinflow/webhook/": {
+            "post": {
+                "operationId": "coinflow_webhook_create",
+                "description": "Handle Coinflow checkout settlement webhooks.",
+                "tags": [
+                    "stripe"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/config/mcp-tools/": {
+            "get": {
+                "operationId": "config_mcp_tools_retrieve",
+                "description": "Return the canonical list of MCP tools. Public endpoint, no auth required.",
+                "tags": [
+                    "config"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/config/testing/": {
+            "get": {
+                "operationId": "config_testing_retrieve",
+                "description": "Return whether the GroundTruther testing entry point is enabled.",
+                "tags": [
+                    "public"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TestingConfig"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/config/tiers/": {
+            "get": {
+                "operationId": "config_tiers_retrieve",
+                "description": "Public endpoint returning the tier configuration.",
+                "tags": [
+                    "config"
+                ],
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
                     }
                 }
             }
@@ -486,10 +972,797 @@
                 }
             }
         },
+        "/api/v1/devices/register/": {
+            "post": {
+                "operationId": "devices_register_create",
+                "description": "Register/deregister push notification device tokens.",
+                "tags": [
+                    "devices"
+                ],
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "devices_register_destroy",
+                "description": "Register/deregister push notification device tokens.",
+                "tags": [
+                    "devices"
+                ],
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/escrow/missions/": {
+            "post": {
+                "operationId": "escrow_missions_create",
+                "tags": [
+                    "escrow"
+                ],
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/escrow/missions/{tid}/": {
+            "get": {
+                "operationId": "escrow_missions_retrieve",
+                "description": "Base for /missions/{tid}/... endpoints.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "tid",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "escrow"
+                ],
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/escrow/missions/{tid}/assign/": {
+            "post": {
+                "operationId": "escrow_missions_assign_create",
+                "description": "Base for /missions/{tid}/... endpoints.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "tid",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "escrow"
+                ],
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/escrow/missions/{tid}/cancel/": {
+            "post": {
+                "operationId": "escrow_missions_cancel_create",
+                "description": "Base for /missions/{tid}/... endpoints.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "tid",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "escrow"
+                ],
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/escrow/missions/{tid}/dispute/": {
+            "post": {
+                "operationId": "escrow_missions_dispute_create",
+                "description": "Base for /missions/{tid}/... endpoints.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "tid",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "escrow"
+                ],
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/escrow/missions/{tid}/escalate/": {
+            "post": {
+                "operationId": "escrow_missions_escalate_create",
+                "description": "Agent-side dispute escalation (policy §1 rung 3): an off-chain request for arbitration.\n\nValid only while the mission is DISPUTED and not already escalated. Stamps\nescalated_at/escalated_by and raises the concierge arbitration signal.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "tid",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "escrow"
+                ],
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/escrow/missions/{tid}/proof/": {
+            "post": {
+                "operationId": "escrow_missions_proof_create",
+                "description": "Base for /missions/{tid}/... endpoints.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "tid",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "escrow"
+                ],
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/escrow/missions/{tid}/refund/": {
+            "post": {
+                "operationId": "escrow_missions_refund_create",
+                "description": "Base for /missions/{tid}/... endpoints.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "tid",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "escrow"
+                ],
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/escrow/missions/{tid}/release/": {
+            "post": {
+                "operationId": "escrow_missions_release_create",
+                "description": "Base for /missions/{tid}/... endpoints.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "tid",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "escrow"
+                ],
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/escrow/missions/{tid}/resolve/": {
+            "post": {
+                "operationId": "escrow_missions_resolve_create",
+                "description": "Base for /missions/{tid}/... endpoints.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "tid",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "escrow"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/escrow/missions/{tid}/submit-assign/": {
+            "post": {
+                "operationId": "escrow_missions_submit_assign_create",
+                "description": "Base for /missions/{tid}/... endpoints.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "tid",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "escrow"
+                ],
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/escrow/missions/{tid}/submit-fund/": {
+            "post": {
+                "operationId": "escrow_missions_submit_fund_create",
+                "description": "Base for /missions/{tid}/... endpoints.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "tid",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "escrow"
+                ],
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/escrow/missions/{tid}/submit-proof/": {
+            "post": {
+                "operationId": "escrow_missions_submit_proof_create",
+                "description": "Base for /missions/{tid}/... endpoints.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "tid",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "escrow"
+                ],
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/escrow/missions/{tid}/submit-tx/": {
+            "post": {
+                "operationId": "escrow_missions_submit_tx_create",
+                "description": "Base for /missions/{tid}/... endpoints.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "tid",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "escrow"
+                ],
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/escrow/missions/list/": {
+            "get": {
+                "operationId": "escrow_missions_list_retrieve",
+                "tags": [
+                    "escrow"
+                ],
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/escrow/worker/tasks/{tid}/claim-tx/": {
+            "post": {
+                "operationId": "escrow_worker_tasks_claim_tx_create",
+                "description": "Build a gas-sponsored self-claim tx for a FUNDED + auto_claim mission on an OPEN task.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "tid",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "escrow"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/escrow/worker/tasks/{tid}/concede-tx/": {
+            "post": {
+                "operationId": "escrow_worker_tasks_concede_tx_create",
+                "description": "Build a gas-sponsored `concede` tx: a full refund to the payer from a disputed mission.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "tid",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "escrow"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/escrow/worker/tasks/{tid}/escalate/": {
+            "post": {
+                "operationId": "escrow_worker_tasks_escalate_create",
+                "description": "Worker-side dispute escalation (policy §1 rung 3): an off-chain request for arbitration.\n\nClaimed-worker only; valid while the mission is DISPUTED and not already escalated. No chain\ntransaction — it stamps escalated_at/escalated_by and raises the concierge arbitration signal.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "tid",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "escrow"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/escrow/worker/tasks/{tid}/mission/": {
+            "get": {
+                "operationId": "escrow_worker_tasks_mission_retrieve",
+                "description": "GET the worker-safe mission view for an OPEN task or one this worker claimed (IDOR-guarded).",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "tid",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "escrow"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/escrow/worker/tasks/{tid}/proof-tx/": {
+            "post": {
+                "operationId": "escrow_worker_tasks_proof_tx_create",
+                "description": "Compute the canonical proof hash, persist it on the mission, build a sponsored submit_proof tx.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "tid",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "escrow"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/escrow/worker/tasks/{tid}/submit-claim/": {
+            "post": {
+                "operationId": "escrow_worker_tasks_submit_claim_create",
+                "description": "Submit the worker-signed self-claim tx and mirror mission/task state + audit ClaimRequest.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "tid",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "escrow"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/escrow/worker/tasks/{tid}/submit-concede/": {
+            "post": {
+                "operationId": "escrow_worker_tasks_submit_concede_create",
+                "description": "Submit the worker-signed `concede` tx; the escrow refunds the payer in full (no fee).",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "tid",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "escrow"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/escrow/worker/tasks/{tid}/submit-proof/": {
+            "post": {
+                "operationId": "escrow_worker_tasks_submit_proof_create",
+                "description": "Submit the worker-signed submit_proof tx; transitions the mission into review on-chain.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "tid",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "escrow"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/escrow/worker/tasks/{tid}/submit-unassign/": {
+            "post": {
+                "operationId": "escrow_worker_tasks_submit_unassign_create",
+                "description": "Submit the worker-signed `unassign` tx; the mission returns to the open pool.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "tid",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "escrow"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/escrow/worker/tasks/{tid}/unassign-tx/": {
+            "post": {
+                "operationId": "escrow_worker_tasks_unassign_tx_create",
+                "description": "Build a gas-sponsored `unassign` tx so the assigned worker can drop the mission.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "tid",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "escrow"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/escrow/worker/wallet/": {
+            "get": {
+                "operationId": "escrow_worker_wallet_retrieve",
+                "description": "The worker's on-chain earnings surface: USDC balance (null on RPC failure) + payout history.",
+                "tags": [
+                    "escrow"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/v1/events/": {
             "get": {
                 "operationId": "agent_list_events",
-                "description": "Get recent events for the authenticated agent.\n\nQuery parameters:\n- since: ISO8601 timestamp, return events after this time\n- limit: max events to return (default 20, max 100)\n\nReturns:\n    200 OK with list of events",
+                "description": "Get recent events for the authenticated agent.\nLegacy endpoint — prefer /api/v1/notifications/ for new integrations.\n\nQuery parameters:\n- since: ISO8601 timestamp, return events after this time\n- limit: max events to return (default 20, max 100)",
                 "parameters": [
                     {
                         "in": "query",
@@ -524,6 +1797,163 @@
                             }
                         },
                         "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/feedback/": {
+            "post": {
+                "operationId": "feedback_create",
+                "description": "Submit a bug report, feedback, or feature request.",
+                "tags": [
+                    "feedback"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/FeedbackReportCreateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/FeedbackReportCreateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/FeedbackReportCreateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/FeedbackReportResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/me/claim-requests/": {
+            "get": {
+                "operationId": "me_claim_requests_list",
+                "description": "GET /api/v1/me/claim-requests/ — worker's own claim-request history.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "status",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter by status"
+                    }
+                ],
+                "tags": [
+                    "worker"
+                ],
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/ClaimRequestResponse"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/notifications/": {
+            "get": {
+                "operationId": "notifications_retrieve",
+                "description": "List notifications for the authenticated user or agent.",
+                "tags": [
+                    "notifications"
+                ],
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/notifications/mark-read/": {
+            "post": {
+                "operationId": "notifications_mark_read_create",
+                "description": "Mark notifications as read.",
+                "tags": [
+                    "notifications"
+                ],
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/notifications/unread-count/": {
+            "get": {
+                "operationId": "notifications_unread_count_retrieve",
+                "description": "Get unread and action-required notification counts.",
+                "tags": [
+                    "notifications"
+                ],
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
                     }
                 }
             }
@@ -1088,6 +2518,30 @@
                 }
             }
         },
+        "/api/v1/payments/config/": {
+            "get": {
+                "operationId": "payments_config_retrieve",
+                "description": "Return the active payment processor configuration for the frontend.",
+                "tags": [
+                    "stripe"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PaymentConfig"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/stripe/config/": {
             "get": {
                 "operationId": "stripe_config_retrieve",
@@ -1140,7 +2594,7 @@
                         "schema": {
                             "type": "string"
                         },
-                        "description": "Filter by task category"
+                        "description": "Filter by mission category"
                     },
                     {
                         "in": "query",
@@ -1148,7 +2602,7 @@
                         "schema": {
                             "type": "string"
                         },
-                        "description": "Filter by task status"
+                        "description": "Filter by mission status"
                     }
                 ],
                 "tags": [
@@ -1452,49 +2906,6 @@
                 }
             }
         },
-        "/api/v1/tasks/{id}/claim/": {
-            "post": {
-                "operationId": "tasks_claim_create",
-                "description": "Worker claims an open task.\n\nArgs:\n    request: HTTP request from authenticated worker\n    pk: Task ID\n\nReturns:\n    200 OK with updated task, or error response",
-                "parameters": [
-                    {
-                        "in": "path",
-                        "name": "id",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid"
-                        },
-                        "required": true
-                    }
-                ],
-                "tags": [
-                    "worker"
-                ],
-                "security": [
-                    {
-                        "apiKeyAuth": []
-                    },
-                    {
-                        "jwtAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/TaskResponse"
-                                }
-                            }
-                        },
-                        "description": ""
-                    },
-                    "409": {
-                        "description": "No response body"
-                    }
-                }
-            }
-        },
         "/api/v1/tasks/{id}/detail/": {
             "get": {
                 "operationId": "tasks_detail_retrieve",
@@ -1582,6 +2993,79 @@
                             }
                         },
                         "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/tasks/{id}/escalate/": {
+            "post": {
+                "operationId": "task_escalate",
+                "description": "Create a manual escalation ticket for a disputed mission.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "worker",
+                    "agent"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TaskEscalationCreateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TaskEscalationCreateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TaskEscalationCreateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskDispute"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "description": "No response body"
+                    },
+                    "403": {
+                        "description": "No response body"
+                    },
+                    "404": {
+                        "description": "No response body"
+                    },
+                    "409": {
+                        "description": "No response body"
                     }
                 }
             }
@@ -1779,6 +3263,46 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/TaskProofResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/tasks/{id}/proof/media/": {
+            "get": {
+                "operationId": "tasks_proof_media_retrieve",
+                "description": "Return presigned view URLs for the latest proof on the task.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "worker"
+                ],
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ProofMediaResponse"
                                 }
                             }
                         },
@@ -2119,10 +3643,292 @@
                 }
             }
         },
+        "/api/v1/tasks/{task_id}/claim-requests/": {
+            "get": {
+                "operationId": "tasks_claim_requests_list",
+                "description": "GET  /api/v1/tasks/<task_id>/claim-requests/  — list (agent owner sees all,\n                                                worker sees their own)\nPOST /api/v1/tasks/<task_id>/claim-requests/  — worker creates a claim request\n\nReplaces the legacy POST /tasks/<id>/claim/. The auto-approve fast path\nfires here (in the same atomic block as request creation) when the task's\nauto_approve_min_tier permits the worker's current tier.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "include_resolved",
+                        "schema": {
+                            "type": "boolean"
+                        },
+                        "description": "Include resolved rows (default: pending only)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "status",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter by status"
+                    },
+                    {
+                        "in": "path",
+                        "name": "task_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "worker"
+                ],
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/ClaimRequestResponse"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "tasks_claim_requests_create",
+                "description": "GET  /api/v1/tasks/<task_id>/claim-requests/  — list (agent owner sees all,\n                                                worker sees their own)\nPOST /api/v1/tasks/<task_id>/claim-requests/  — worker creates a claim request\n\nReplaces the legacy POST /tasks/<id>/claim/. The auto-approve fast path\nfires here (in the same atomic block as request creation) when the task's\nauto_approve_min_tier permits the worker's current tier.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "task_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "worker"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ClaimRequestCreateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ClaimRequestCreateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ClaimRequestCreateRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ClaimRequestResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/tasks/{task_id}/claim-requests/{request_id}/approve/": {
+            "post": {
+                "operationId": "tasks_claim_requests_approve_create",
+                "description": "POST /api/v1/tasks/<task_id>/claim-requests/<request_id>/approve/",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "request_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "task_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "agent"
+                ],
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/tasks/{task_id}/claim-requests/{request_id}/cancel/": {
+            "post": {
+                "operationId": "tasks_claim_requests_cancel_create",
+                "description": "POST /api/v1/tasks/<task_id>/claim-requests/<request_id>/cancel/",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "request_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "task_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "agent"
+                ],
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ClaimRequestResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/tasks/{task_id}/claim-requests/{request_id}/decline/": {
+            "post": {
+                "operationId": "tasks_claim_requests_decline_create",
+                "description": "POST /api/v1/tasks/<task_id>/claim-requests/<request_id>/decline/",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "request_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "task_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "worker"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ClaimRequestDeclineRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ClaimRequestDeclineRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ClaimRequestDeclineRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ClaimRequestResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/tasks/browse/": {
             "get": {
                 "operationId": "tasks_browse_list",
-                "description": "Browse open tasks with optional filters.\n\nQuery parameters:\n- lat: latitude for location filtering\n- lng: longitude for location filtering\n- radius: radius in km for location filtering (default 10 if lat/lng provided)\n- category: filter by task category\n- min_budget: minimum budget amount\n- max_budget: maximum budget amount\n\nReturns:\n    200 OK with paginated list of tasks",
+                "description": "Browse open tasks with optional filters.\n\nQuery parameters:\n- lat: latitude for location filtering\n- lng: longitude for location filtering\n- radius: radius in miles for location filtering (default 10 if lat/lng provided)\n- category: filter by task category\n- min_budget: minimum budget amount\n- max_budget: maximum budget amount\n\nReturns:\n    200 OK with paginated list of tasks",
                 "parameters": [
                     {
                         "in": "query",
@@ -2130,7 +3936,7 @@
                         "schema": {
                             "type": "string"
                         },
-                        "description": "Filter by task category"
+                        "description": "Filter by mission category"
                     },
                     {
                         "in": "query",
@@ -2168,7 +3974,7 @@
                     },
                     {
                         "in": "query",
-                        "name": "radius_mi",
+                        "name": "radius_km",
                         "schema": {
                             "type": "number",
                             "format": "double"
@@ -2271,6 +4077,35 @@
                 }
             }
         },
+        "/api/v1/tasks/my/counts/": {
+            "get": {
+                "operationId": "tasks_my_counts_retrieve",
+                "description": "Get count of worker's tasks by status group.",
+                "tags": [
+                    "worker"
+                ],
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MyTaskCounts"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/tasks/public/": {
             "get": {
                 "operationId": "tasks_public_list",
@@ -2345,21 +4180,33 @@
                 }
             }
         },
+        "/api/v1/tasks/public/geojson/": {
+            "get": {
+                "operationId": "tasks_public_geojson_retrieve",
+                "description": "Lightweight GeoJSON endpoint for map clustering — returns only coordinates and minimal metadata.",
+                "tags": [
+                    "public"
+                ],
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/v1/templates/": {
             "get": {
                 "operationId": "templates_list",
                 "description": "List all active task templates.",
-                "parameters": [
-                    {
-                        "name": "ordering",
-                        "required": false,
-                        "in": "query",
-                        "description": "Which field to use when ordering the results.",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
                 "tags": [
                     "public"
                 ],
@@ -2570,7 +4417,7 @@
         "/api/v1/wallet/deposit/": {
             "post": {
                 "operationId": "wallet_deposit_create",
-                "description": "Create a Stripe PaymentIntent for depositing funds.",
+                "description": "Initiate an owner wallet deposit with the active payment processor.",
                 "tags": [
                     "owner"
                 ],
@@ -2605,6 +4452,96 @@
                 "responses": {
                     "200": {
                         "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/wallet/owner-withdraw/": {
+            "post": {
+                "operationId": "wallet_owner_withdraw_create",
+                "description": "Withdraw unspent wallet balance back to card via Stripe refund.\n\nUses optimistic-debit pattern: lock rows, debit wallet, update deposits,\ncreate transaction — all inside one atomic block. Then call Stripe outside\nthe lock. If Stripe fails, reverse the debit in a compensating transaction.\nThis prevents double-spend race conditions.",
+                "tags": [
+                    "wallet"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/OwnerWithdrawRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/OwnerWithdrawRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/OwnerWithdrawRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/wallet/payout/kyc/": {
+            "post": {
+                "operationId": "wallet_payout_kyc_create",
+                "description": "Collect deferred KYC for Coinflow worker payouts.",
+                "tags": [
+                    "payments"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PayoutKYCRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PayoutKYCRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PayoutKYCRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "apiKeyAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PayoutKYCResponse"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -3211,6 +5148,45 @@
                     "name"
                 ]
             },
+            "AppleOAuthRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "identity_token": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "full_name": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "email": {
+                        "type": "string",
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "identity_token"
+                ]
+            },
+            "AppleOAuthResponse": {
+                "type": "object",
+                "properties": {
+                    "access_token": {
+                        "type": "string"
+                    },
+                    "token_type": {
+                        "type": "string"
+                    },
+                    "is_new_user": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "access_token",
+                    "is_new_user",
+                    "token_type"
+                ]
+            },
             "BlankEnum": {
                 "enum": [
                     ""
@@ -3257,6 +5233,117 @@
                 "type": "string",
                 "description": "* `PHYSICAL_WORLD` - Physical World\n* `IDENTITY_LEGAL` - Identity & Legal\n* `OFFLINE_GATED` - Offline Gated\n* `EMBODIED_JUDGMENT` - Embodied Judgment\n* `SOCIAL_RELATIONAL` - Social & Relational\n* `EXPERT_CURATION` - Expert Curation\n* `DELIVERY` - Delivery\n* `DIGITAL_REMOTE` - Digital & Remote"
             },
+            "ClaimRequestCreateRequest": {
+                "type": "object",
+                "description": "Worker-side input for POST /tasks/<id>/claim-requests/.",
+                "properties": {
+                    "request_note": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 500
+                    },
+                    "payout_pubkey": {
+                        "type": "string",
+                        "default": "",
+                        "pattern": "^[1-9A-HJ-NP-Za-km-z]{32,44}$"
+                    }
+                }
+            },
+            "ClaimRequestDeclineRequest": {
+                "type": "object",
+                "description": "Agent-side input for the decline action.",
+                "properties": {
+                    "decline_reason": {
+                        "type": "string",
+                        "default": "",
+                        "maxLength": 500
+                    }
+                }
+            },
+            "ClaimRequestResponse": {
+                "type": "object",
+                "description": "Full ClaimRequest payload returned by all claim-request endpoints.",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "task_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "worker": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "status": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/ClaimRequestResponseStatusEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "request_note": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Optional pitch the worker submits with the request (max 500 chars)."
+                    },
+                    "decline_reason": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Optional reason the agent provides when declining (max 500 chars)."
+                    },
+                    "auto_approved": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "description": "True when this row was created+approved in one txn via auto-approve."
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "resolved_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "resolved_by_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true,
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "auto_approved",
+                    "created_at",
+                    "decline_reason",
+                    "id",
+                    "request_note",
+                    "resolved_at",
+                    "resolved_by_id",
+                    "status",
+                    "task_id",
+                    "worker"
+                ]
+            },
+            "ClaimRequestResponseStatusEnum": {
+                "enum": [
+                    "pending",
+                    "approved",
+                    "declined",
+                    "superseded",
+                    "cancelled",
+                    "withdrawn"
+                ],
+                "type": "string",
+                "description": "* `pending` - Pending\n* `approved` - Approved\n* `declined` - Declined\n* `superseded` - Superseded\n* `cancelled` - Cancelled\n* `withdrawn` - Withdrawn"
+            },
             "ConnectOnboardResponse": {
                 "type": "object",
                 "description": "Response for Connect onboard endpoint.",
@@ -3285,6 +5372,28 @@
                     },
                     "account_id": {
                         "type": "string",
+                        "nullable": true
+                    },
+                    "verification_status": {
+                        "type": "string"
+                    },
+                    "has_payout_destination": {
+                        "type": "boolean"
+                    },
+                    "needs_kyc": {
+                        "type": "boolean"
+                    },
+                    "bank_name": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "bank_last4": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "verification_link": {
+                        "type": "string",
+                        "format": "uri",
                         "nullable": true
                     }
                 },
@@ -3380,6 +5489,50 @@
                     "wallet_balance"
                 ]
             },
+            "EmailVerifyConfirmRequest": {
+                "type": "object",
+                "description": "Serializer for email verification confirmation.",
+                "properties": {
+                    "uidb64": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "token": {
+                        "type": "string",
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "token",
+                    "uidb64"
+                ]
+            },
+            "EmailVerifyConfirmResponse": {
+                "type": "object",
+                "properties": {
+                    "access_token": {
+                        "type": "string"
+                    },
+                    "token_type": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "access_token",
+                    "token_type"
+                ]
+            },
+            "EmailVerifySendResponse": {
+                "type": "object",
+                "properties": {
+                    "detail": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "detail"
+                ]
+            },
             "EventTypeEnum": {
                 "enum": [
                     "task_claimed",
@@ -3391,7 +5544,93 @@
                     "message_received"
                 ],
                 "type": "string",
-                "description": "* `task_claimed` - Task Claimed\n* `task_started` - Task Started\n* `proof_submitted` - Proof Submitted\n* `task_completed` - Task Completed\n* `task_cancelled` - Task Cancelled\n* `task_expired` - Task Expired\n* `message_received` - Message Received"
+                "description": "* `task_claimed` - Mission Claimed\n* `task_started` - Mission Started\n* `proof_submitted` - Proof Submitted\n* `task_completed` - Mission Completed\n* `task_cancelled` - Mission Cancelled\n* `task_expired` - Mission Expired\n* `message_received` - Message Received"
+            },
+            "FeedbackReportCreateRequest": {
+                "type": "object",
+                "description": "Serializer for submitting a feedback/bug report.",
+                "properties": {
+                    "type": {
+                        "$ref": "#/components/schemas/TypeEnum"
+                    },
+                    "title": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 255
+                    },
+                    "description": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 10000
+                    },
+                    "platform": {
+                        "$ref": "#/components/schemas/PlatformEnum"
+                    },
+                    "file_urls": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "format": "uri",
+                            "minLength": 1
+                        },
+                        "maxItems": 10
+                    }
+                },
+                "required": [
+                    "description",
+                    "platform",
+                    "title",
+                    "type"
+                ]
+            },
+            "FeedbackReportResponse": {
+                "type": "object",
+                "description": "Serializer for feedback report response.",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "type": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "title": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "description": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "platform": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "status": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "file_urls": {
+                        "readOnly": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "description",
+                    "file_urls",
+                    "id",
+                    "platform",
+                    "status",
+                    "title",
+                    "type"
+                ]
             },
             "GitHubOAuthRequestRequest": {
                 "type": "object",
@@ -3459,12 +5698,93 @@
                     "token_type"
                 ]
             },
+            "MyTaskCounts": {
+                "type": "object",
+                "properties": {
+                    "active": {
+                        "type": "integer"
+                    },
+                    "submitted": {
+                        "type": "integer"
+                    },
+                    "completed": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "active",
+                    "completed",
+                    "submitted"
+                ]
+            },
             "NullEnum": {
                 "enum": [
                     null
                 ]
             },
             "OAuthResponse": {
+                "type": "object",
+                "properties": {
+                    "access_token": {
+                        "type": "string"
+                    },
+                    "token_type": {
+                        "type": "string"
+                    },
+                    "is_new_user": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "access_token",
+                    "is_new_user",
+                    "token_type"
+                ]
+            },
+            "OTPSendRequest": {
+                "type": "object",
+                "description": "Serializer for OTP send request with E.164 phone validation.",
+                "properties": {
+                    "phone": {
+                        "type": "string",
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "phone"
+                ]
+            },
+            "OTPSendResponse": {
+                "type": "object",
+                "properties": {
+                    "detail": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "detail"
+                ]
+            },
+            "OTPVerifyRequest": {
+                "type": "object",
+                "description": "Serializer for OTP verify request.",
+                "properties": {
+                    "phone": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "code": {
+                        "type": "string",
+                        "minLength": 6,
+                        "maxLength": 6
+                    }
+                },
+                "required": [
+                    "code",
+                    "phone"
+                ]
+            },
+            "OTPVerifyResponse": {
                 "type": "object",
                 "properties": {
                     "access_token": {
@@ -3536,6 +5856,10 @@
                         "type": "integer",
                         "readOnly": true
                     },
+                    "tasks_active": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
                     "total_spent": {
                         "type": "string",
                         "readOnly": true
@@ -3554,6 +5878,7 @@
                     "daily_spend_used",
                     "id",
                     "name",
+                    "tasks_active",
                     "tasks_completed",
                     "tasks_created",
                     "total_spent",
@@ -3640,6 +5965,18 @@
                     "title"
                 ]
             },
+            "OwnerWithdrawRequest": {
+                "type": "object",
+                "description": "Serializer for owner withdrawal request.",
+                "properties": {
+                    "amount": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,2})?$",
+                        "nullable": true
+                    }
+                }
+            },
             "PasswordResetConfirmRequest": {
                 "type": "object",
                 "description": "Serializer for password reset confirmation.",
@@ -3702,7 +6039,7 @@
             },
             "PatchedUserProfileUpdateRequest": {
                 "type": "object",
-                "description": "Serializer for updating worker profile (username, phone).",
+                "description": "Serializer for updating worker profile.",
                 "properties": {
                     "username": {
                         "type": "string",
@@ -3715,8 +6052,152 @@
                         "type": "string",
                         "nullable": true,
                         "maxLength": 50
+                    },
+                    "full_name": {
+                        "type": "string",
+                        "maxLength": 150
+                    },
+                    "role": {
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/RoleE97Enum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
+                    },
+                    "country": {
+                        "type": "string",
+                        "maxLength": 100
+                    },
+                    "city": {
+                        "type": "string",
+                        "maxLength": 100
+                    },
+                    "latitude": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,3}(?:\\.\\d{0,6})?$",
+                        "nullable": true
+                    },
+                    "longitude": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,3}(?:\\.\\d{0,6})?$",
+                        "nullable": true
                     }
                 }
+            },
+            "PaymentConfig": {
+                "type": "object",
+                "properties": {
+                    "processor": {
+                        "type": "string"
+                    },
+                    "publishable_key": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "processor"
+                ]
+            },
+            "PayoutKYCRequest": {
+                "type": "object",
+                "description": "Deferred KYC form collected before first Coinflow withdrawal.",
+                "properties": {
+                    "first_name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                    },
+                    "last_name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                    },
+                    "physical_address": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 255
+                    },
+                    "city": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                    },
+                    "state": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                    },
+                    "zip": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 20
+                    },
+                    "country": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2
+                    },
+                    "dob": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 8
+                    },
+                    "ssn": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4
+                    }
+                },
+                "required": [
+                    "city",
+                    "country",
+                    "dob",
+                    "first_name",
+                    "last_name",
+                    "physical_address",
+                    "ssn",
+                    "state",
+                    "zip"
+                ]
+            },
+            "PayoutKYCResponse": {
+                "type": "object",
+                "description": "Response for deferred payout KYC submission.",
+                "properties": {
+                    "verification_status": {
+                        "type": "string"
+                    },
+                    "needs_additional_verification": {
+                        "type": "boolean"
+                    },
+                    "verification_link": {
+                        "type": "string",
+                        "format": "uri",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "needs_additional_verification",
+                    "verification_status"
+                ]
+            },
+            "PlatformEnum": {
+                "enum": [
+                    "web",
+                    "ios",
+                    "mcp"
+                ],
+                "type": "string",
+                "description": "* `web` - web\n* `ios` - ios\n* `mcp` - mcp"
             },
             "PresignedUploadRequestRequest": {
                 "type": "object",
@@ -3759,6 +6240,48 @@
                     "file_url",
                     "max_file_size",
                     "upload_url"
+                ]
+            },
+            "PrivyAuthRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "identity_token": {
+                        "type": "string",
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "identity_token"
+                ]
+            },
+            "PrivyAuthResponse": {
+                "type": "object",
+                "properties": {
+                    "access_token": {
+                        "type": "string"
+                    },
+                    "token_type": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "access_token",
+                    "token_type"
+                ]
+            },
+            "ProofMediaResponse": {
+                "type": "object",
+                "properties": {
+                    "urls": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "format": "uri"
+                        }
+                    }
+                },
+                "required": [
+                    "urls"
                 ]
             },
             "ProofPreviewRequestRequest": {
@@ -3834,6 +6357,9 @@
                     "structured_data": {
                         "type": "object",
                         "additionalProperties": {},
+                        "nullable": true
+                    },
+                    "proof_urls": {
                         "nullable": true
                     }
                 }
@@ -3952,9 +6478,6 @@
                         "pattern": "^-?\\d{0,6}(?:\\.\\d{0,2})?$",
                         "nullable": true
                     },
-                    "verification_type": {
-                        "$ref": "#/components/schemas/VerificationTypeEnum"
-                    },
                     "acceptance_contract": {
                         "nullable": true,
                         "description": "Immutable acceptance criteria contract for proof validation"
@@ -3981,7 +6504,6 @@
                     "description",
                     "id",
                     "title",
-                    "verification_type",
                     "waypoints"
                 ]
             },
@@ -4036,9 +6558,6 @@
                         "pattern": "^-?\\d{0,6}(?:\\.\\d{0,2})?$",
                         "nullable": true
                     },
-                    "verification_type": {
-                        "$ref": "#/components/schemas/VerificationTypeEnum"
-                    },
                     "created_at": {
                         "type": "string",
                         "format": "date-time",
@@ -4050,6 +6569,10 @@
                             "$ref": "#/components/schemas/TaskWaypointResponse"
                         },
                         "readOnly": true
+                    },
+                    "is_qa_test": {
+                        "type": "string",
+                        "readOnly": true
                     }
                 },
                 "required": [
@@ -4059,8 +6582,8 @@
                     "created_at",
                     "deadline",
                     "id",
+                    "is_qa_test",
                     "title",
-                    "verification_type",
                     "waypoints"
                 ]
             },
@@ -4132,7 +6655,6 @@
                     },
                     "comment": {
                         "type": "string",
-                        "minLength": 1,
                         "default": "",
                         "maxLength": 2000
                     }
@@ -4148,6 +6670,15 @@
                 ],
                 "type": "string",
                 "description": "* `agent` - Agent\n* `worker` - Worker"
+            },
+            "RoleE97Enum": {
+                "enum": [
+                    "agent_owner",
+                    "worker",
+                    "admin"
+                ],
+                "type": "string",
+                "description": "* `agent_owner` - Agent Owner\n* `worker` - Worker\n* `admin` - Administrator"
             },
             "StatusC2eEnum": {
                 "enum": [
@@ -4225,6 +6756,12 @@
                         "pattern": "^-?\\d{0,6}(?:\\.\\d{0,2})?$",
                         "nullable": true
                     },
+                    "drop_grace_secs": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 3600,
+                        "description": "Payer-set no-fault drop window (seconds from claim). A worker who drops within this window records an 'in_grace' drop (no reputation penalty); after it, the drop is 'late' and counts against their completion rate. Platform floor is 3600s (1h); agents may set it higher at task creation."
+                    },
                     "created_at": {
                         "type": "string",
                         "format": "date-time",
@@ -4236,6 +6773,10 @@
                             "$ref": "#/components/schemas/TaskWaypointResponse"
                         },
                         "readOnly": true
+                    },
+                    "is_qa_test": {
+                        "type": "string",
+                        "readOnly": true
                     }
                 },
                 "required": [
@@ -4245,6 +6786,7 @@
                     "created_at",
                     "deadline",
                     "id",
+                    "is_qa_test",
                     "title",
                     "waypoints"
                 ]
@@ -4299,9 +6841,6 @@
                         "minLength": 1,
                         "maxLength": 3
                     },
-                    "verification_type": {
-                        "$ref": "#/components/schemas/VerificationTypeEnum"
-                    },
                     "verification_requirements": {
                         "nullable": true
                     },
@@ -4313,6 +6852,18 @@
                         "items": {
                             "$ref": "#/components/schemas/TaskWaypointRequest"
                         }
+                    },
+                    "auto_approve_min_tier": {
+                        "type": "integer",
+                        "maximum": 3,
+                        "minimum": 0,
+                        "nullable": true,
+                        "description": "If set, claim requests from workers with tier >= this value are auto-approved at request time (skipping agent review). null means every claim request must be reviewed by the agent. Set at mission creation; not editable in Phase A."
+                    },
+                    "drop_grace_secs": {
+                        "type": "integer",
+                        "minimum": 3600,
+                        "description": "No-fault drop window in seconds from claim (default 7200 = 2h). Drops within it are penalty-free for the worker; later drops count against their completion rate. Platform floor: 3600."
                     }
                 },
                 "required": [
@@ -4320,8 +6871,7 @@
                     "category",
                     "deadline",
                     "description",
-                    "title",
-                    "verification_type"
+                    "title"
                 ]
             },
             "TaskDetailProof": {
@@ -4340,14 +6890,18 @@
                     "gps_lat": {
                         "type": "string",
                         "format": "decimal",
-                        "pattern": "^-?\\d{0,3}(?:\\.\\d{0,7})?$",
+                        "pattern": "^-?\\d{0,5}(?:\\.\\d{0,7})?$",
                         "nullable": true
                     },
                     "gps_lng": {
                         "type": "string",
                         "format": "decimal",
-                        "pattern": "^-?\\d{0,3}(?:\\.\\d{0,7})?$",
+                        "pattern": "^-?\\d{0,5}(?:\\.\\d{0,7})?$",
                         "nullable": true
+                    },
+                    "structured_data": {
+                        "type": "string",
+                        "readOnly": true
                     },
                     "proof_urls": {
                         "nullable": true,
@@ -4362,7 +6916,63 @@
                 "required": [
                     "id",
                     "proof_type",
+                    "structured_data",
                     "submitted_at"
+                ]
+            },
+            "TaskDispute": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/TaskDisputeStatusEnum"
+                    },
+                    "note": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "initiated_by_role": {
+                        "type": "string",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "id",
+                    "initiated_by_role",
+                    "note"
+                ]
+            },
+            "TaskDisputeStatusEnum": {
+                "enum": [
+                    "open",
+                    "under_review",
+                    "resolved"
+                ],
+                "type": "string",
+                "description": "* `open` - Open\n* `under_review` - Under Review\n* `resolved` - Resolved"
+            },
+            "TaskEscalationCreateRequest": {
+                "type": "object",
+                "description": "Serializer for creating a manual escalation ticket.",
+                "properties": {
+                    "note": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2000
+                    }
+                },
+                "required": [
+                    "note"
                 ]
             },
             "TaskList": {
@@ -4420,6 +7030,11 @@
                                 "$ref": "#/components/schemas/NullEnum"
                             }
                         ]
+                    },
+                    "worker_has_rated": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "default": false
                     }
                 },
                 "required": [
@@ -4429,7 +7044,8 @@
                     "created_at",
                     "deadline",
                     "id",
-                    "title"
+                    "title",
+                    "worker_has_rated"
                 ]
             },
             "TaskMessage": {
@@ -4519,18 +7135,21 @@
                     "gps_lat": {
                         "type": "string",
                         "format": "decimal",
-                        "pattern": "^-?\\d{0,3}(?:\\.\\d{0,7})?$",
+                        "pattern": "^-?\\d{0,5}(?:\\.\\d{0,7})?$",
                         "nullable": true
                     },
                     "gps_lng": {
                         "type": "string",
                         "format": "decimal",
-                        "pattern": "^-?\\d{0,3}(?:\\.\\d{0,7})?$",
+                        "pattern": "^-?\\d{0,5}(?:\\.\\d{0,7})?$",
                         "nullable": true
                     },
                     "proof_urls": {
                         "nullable": true,
                         "description": "List of {key, url} objects for URL_PROOF verification"
+                    },
+                    "structured_data": {
+                        "nullable": true
                     },
                     "created_at": {
                         "type": "string",
@@ -4555,13 +7174,13 @@
                     "gps_lat": {
                         "type": "string",
                         "format": "decimal",
-                        "pattern": "^-?\\d{0,3}(?:\\.\\d{0,7})?$",
+                        "pattern": "^-?\\d{0,5}(?:\\.\\d{0,7})?$",
                         "nullable": true
                     },
                     "gps_lng": {
                         "type": "string",
                         "format": "decimal",
-                        "pattern": "^-?\\d{0,3}(?:\\.\\d{0,7})?$",
+                        "pattern": "^-?\\d{0,5}(?:\\.\\d{0,7})?$",
                         "nullable": true
                     },
                     "gps_timestamp": {
@@ -4604,13 +7223,13 @@
                     "gps_lat": {
                         "type": "string",
                         "format": "decimal",
-                        "pattern": "^-?\\d{0,3}(?:\\.\\d{0,7})?$",
+                        "pattern": "^-?\\d{0,5}(?:\\.\\d{0,7})?$",
                         "nullable": true
                     },
                     "gps_lng": {
                         "type": "string",
                         "format": "decimal",
-                        "pattern": "^-?\\d{0,3}(?:\\.\\d{0,7})?$",
+                        "pattern": "^-?\\d{0,5}(?:\\.\\d{0,7})?$",
                         "nullable": true
                     },
                     "gps_timestamp": {
@@ -4619,7 +7238,8 @@
                         "nullable": true
                     },
                     "structured_data": {
-                        "nullable": true
+                        "type": "string",
+                        "readOnly": true
                     },
                     "proof_urls": {
                         "nullable": true,
@@ -4634,6 +7254,7 @@
                 "required": [
                     "id",
                     "proof_type",
+                    "structured_data",
                     "submitted_at",
                     "task",
                     "worker"
@@ -4720,9 +7341,6 @@
                     "status": {
                         "$ref": "#/components/schemas/StatusC2eEnum"
                     },
-                    "verification_type": {
-                        "$ref": "#/components/schemas/VerificationTypeEnum"
-                    },
                     "verification_requirements": {
                         "nullable": true
                     },
@@ -4767,7 +7385,20 @@
                     },
                     "cancellation_reason": {
                         "type": "string",
-                        "nullable": true
+                        "readOnly": true
+                    },
+                    "auto_approve_min_tier": {
+                        "type": "integer",
+                        "maximum": 3,
+                        "minimum": 0,
+                        "nullable": true,
+                        "description": "If set, claim requests from workers with tier >= this value are auto-approved at request time (skipping agent review). null means every claim request must be reviewed by the agent. Set at mission creation; not editable in Phase A."
+                    },
+                    "drop_grace_secs": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 3600,
+                        "description": "Payer-set no-fault drop window (seconds from claim). A worker who drops within this window records an 'in_grace' drop (no reputation penalty); after it, the drop is 'late' and counts against their completion rate. Platform floor is 3600s (1h); agents may set it higher at task creation."
                     },
                     "created_at": {
                         "type": "string",
@@ -4791,11 +7422,26 @@
                     "worker_stats": {
                         "type": "string",
                         "readOnly": true
+                    },
+                    "worker_rating": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "can_worker_escalate": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "active_dispute": {
+                        "type": "string",
+                        "readOnly": true
                     }
                 },
                 "required": [
+                    "active_dispute",
                     "agent",
                     "budget_amount",
+                    "can_worker_escalate",
+                    "cancellation_reason",
                     "category",
                     "created_at",
                     "deadline",
@@ -4804,8 +7450,8 @@
                     "proofs",
                     "template",
                     "title",
-                    "verification_type",
                     "waypoints",
+                    "worker_rating",
                     "worker_stats"
                 ]
             },
@@ -4829,9 +7475,6 @@
                         "type": "string"
                     },
                     "schema": {},
-                    "verification_type": {
-                        "$ref": "#/components/schemas/VerificationTypeEnum"
-                    },
                     "default_verification_requirements": {
                         "nullable": true
                     },
@@ -4860,8 +7503,7 @@
                     "estimated_duration_minutes",
                     "id",
                     "min_budget",
-                    "name",
-                    "verification_type"
+                    "name"
                 ]
             },
             "TaskTemplateNested": {
@@ -4972,6 +7614,20 @@
                     "order"
                 ]
             },
+            "TestingConfig": {
+                "type": "object",
+                "properties": {
+                    "enabled": {
+                        "type": "boolean"
+                    },
+                    "url": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "enabled"
+                ]
+            },
             "TokenResponse": {
                 "type": "object",
                 "description": "Serializer for token response.",
@@ -4987,6 +7643,15 @@
                 "required": [
                     "access_token"
                 ]
+            },
+            "TypeEnum": {
+                "enum": [
+                    "bug",
+                    "feedback",
+                    "feature_request"
+                ],
+                "type": "string",
+                "description": "* `bug` - bug\n* `feedback` - feedback\n* `feature_request` - feature_request"
             },
             "UnreadCount": {
                 "type": "object",
@@ -5024,11 +7689,7 @@
                 "description": "Serializer for user registration.",
                 "properties": {
                     "username": {
-                        "type": "string",
-                        "minLength": 1,
-                        "description": "Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only.",
-                        "pattern": "^[\\w.@+-]+$",
-                        "maxLength": 150
+                        "type": "string"
                     },
                     "email": {
                         "type": "string",
@@ -5051,8 +7712,7 @@
                 },
                 "required": [
                     "email",
-                    "password",
-                    "username"
+                    "password"
                 ]
             },
             "UserRegisterRoleEnum": {
@@ -5090,7 +7750,18 @@
                         "maxLength": 50
                     },
                     "role": {
-                        "$ref": "#/components/schemas/UserResponseRoleEnum"
+                        "nullable": true,
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/RoleE97Enum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/NullEnum"
+                            }
+                        ]
                     },
                     "identity_verified": {
                         "type": "boolean"
@@ -5099,21 +7770,52 @@
                         "type": "integer",
                         "maximum": 2147483647,
                         "minimum": -2147483648
+                    },
+                    "email_verified": {
+                        "type": "boolean"
+                    },
+                    "phone_verified": {
+                        "type": "boolean"
+                    },
+                    "full_name": {
+                        "type": "string",
+                        "maxLength": 150
+                    },
+                    "country": {
+                        "type": "string",
+                        "maxLength": 100
+                    },
+                    "city": {
+                        "type": "string",
+                        "maxLength": 100
+                    },
+                    "latitude": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,3}(?:\\.\\d{0,6})?$",
+                        "nullable": true
+                    },
+                    "longitude": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,3}(?:\\.\\d{0,6})?$",
+                        "nullable": true
+                    },
+                    "date_joined": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "wallet_pubkey": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Cached embedded-wallet address (base58); set/refreshed at Privy exchange."
                     }
                 },
                 "required": [
                     "id",
-                    "username"
+                    "username",
+                    "wallet_pubkey"
                 ]
-            },
-            "UserResponseRoleEnum": {
-                "enum": [
-                    "agent_owner",
-                    "worker",
-                    "admin"
-                ],
-                "type": "string",
-                "description": "* `agent_owner` - Agent Owner\n* `worker` - Worker\n* `admin` - Administrator"
             },
             "VerificationCheck": {
                 "type": "object",
@@ -5167,17 +7869,6 @@
                     "verification_tier"
                 ]
             },
-            "VerificationTypeEnum": {
-                "enum": [
-                    "PHOTO_PROOF",
-                    "VIDEO_PROOF",
-                    "STRUCTURED_DATA",
-                    "SIGNED_RECEIPT",
-                    "URL_PROOF"
-                ],
-                "type": "string",
-                "description": "* `PHOTO_PROOF` - Photo Proof\n* `VIDEO_PROOF` - Video Proof\n* `STRUCTURED_DATA` - Structured Data\n* `SIGNED_RECEIPT` - Signed Receipt\n* `URL_PROOF` - URL Proof"
-            },
             "VerificationUpgradeRequest": {
                 "type": "object",
                 "description": "Serializer for requesting a verification tier upgrade.",
@@ -5194,12 +7885,62 @@
             },
             "WalletDepositRequest": {
                 "type": "object",
-                "description": "Serializer for wallet deposit endpoint.",
+                "description": "Serializer for wallet deposit endpoint.\n\nStripe path uses only `amount` (a PaymentIntent client_secret is returned).\nCoinflow headless path additionally requires `card_token` plus expiry and\nbilling fields; the view enforces presence based on the active processor.",
                 "properties": {
                     "amount": {
                         "type": "string",
                         "format": "decimal",
                         "pattern": "^-?\\d{0,10}(?:\\.\\d{0,2})?$"
+                    },
+                    "card_token": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 512
+                    },
+                    "exp_month": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2
+                    },
+                    "exp_year": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4
+                    },
+                    "first_name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                    },
+                    "last_name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                    },
+                    "address1": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 255
+                    },
+                    "city": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                    },
+                    "state": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                    },
+                    "postal_code": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 20
+                    },
+                    "country": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2
                     }
                 },
                 "required": [
@@ -5225,6 +7966,14 @@
                         "type": "string",
                         "readOnly": true
                     },
+                    "withdrawable_balance": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "total_stripe_fees": {
+                        "type": "string",
+                        "readOnly": true
+                    },
                     "recent_transactions": {
                         "type": "string",
                         "readOnly": true
@@ -5234,7 +7983,9 @@
                     "balance",
                     "currency",
                     "id",
-                    "recent_transactions"
+                    "recent_transactions",
+                    "total_stripe_fees",
+                    "withdrawable_balance"
                 ]
             },
             "WalletTransaction": {

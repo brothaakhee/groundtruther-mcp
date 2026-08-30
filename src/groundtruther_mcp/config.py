@@ -9,8 +9,9 @@ class Config:
     # API Key from environment variable
     API_KEY: Optional[str] = os.getenv("GT_API_KEY")
 
-    # API base URL from environment variable, default to localhost
-    API_BASE_URL: str = os.getenv("GT_API_URL", "http://localhost:8000/api/v1")
+    # API base URL from environment variable. The default matches the local
+    # docker-compose stack, which publishes the API on host port 8001.
+    API_BASE_URL: str = os.getenv("GT_API_URL", "http://localhost:8001/api/v1")
 
     # On-chain escrow (optional). When enabled and a payer key is configured, escrow tools sign
     # client-side (Mode A). The payer secret key NEVER leaves this process.

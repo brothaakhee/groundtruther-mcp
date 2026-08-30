@@ -112,6 +112,29 @@ def _mock_http(method, status_code, response_data):
     return patcher, mock_client
 
 
+def _mock_http_seq(method, responses):
+    """Like _mock_http but serves a sequence of responses (or raises exceptions).
+
+    responses: list of (status_code, data) tuples or Exception instances.
+    """
+    patcher = patch("httpx.AsyncClient")
+    mock_client_class = patcher.start()
+    mock_client = AsyncMock()
+    side_effects = []
+    for item in responses:
+        if isinstance(item, Exception):
+            side_effects.append(item)
+            continue
+        status_code, data = item
+        mock_response = MagicMock()
+        mock_response.status_code = status_code
+        mock_response.json.return_value = data
+        side_effects.append(mock_response)
+    getattr(mock_client, method).side_effect = side_effects
+    mock_client_class.return_value.__aenter__.return_value = mock_client
+    return patcher, mock_client
+
+
 class TestRequestQaTest:
     """Tests for request_qa_test tool."""
 
@@ -153,7 +176,8 @@ class TestRequestQaTest:
 
             response = json.loads(result)
             assert response["task_id"] == mission_uuid
-            assert response["status"] == "OPEN"
+            # Raw OPEN maps through the same lowercase vocabulary as get_qa_result.
+            assert response["status"] == "pending"
             assert "next" in response
         finally:
             patcher.stop()
@@ -608,7 +632,7 @@ class TestGetQaResult:
 
     @pytest.mark.asyncio
     async def test_get_qa_result_blocked(self, mission_uuid, qa_contract):
-        """A blocked run surfaces blocked steps in the joined view, not failed_steps."""
+        """A blocked run surfaces blocked_steps (pre-joined), not failed_steps."""
         from groundtruther_mcp.tools_qa import get_qa_result
 
         proof = _make_qa_proof(
@@ -621,10 +645,106 @@ class TestGetQaResult:
             response = json.loads(await get_qa_result(mission_uuid))
             assert response["overall_verdict"] == "blocked"
             assert response["failed_steps"] == []
+            # blocked_steps mirrors failed_steps: joined with instruction/expected
+            assert response["blocked_steps"] == [
+                {
+                    "id": "s1",
+                    "instruction": "Log in with the test account",
+                    "expected": "Dashboard loads",
+                    "observed": "Staging site returned 502 — could not start",
+                },
+                {
+                    "id": "s2",
+                    "instruction": "Add an item to cart and check out",
+                    "expected": "Order confirmation page shown",
+                    "observed": "Blocked by step 1",
+                },
+            ]
             verdicts = [s["verdict"] for s in response["steps"]]
             assert verdicts == ["blocked", "blocked"]
             assert response["steps"][0]["observed"] == "Staging site returned 502 — could not start"
             assert "blocked" in response["next_action"]
+        finally:
+            patcher.stop()
+
+    @pytest.mark.asyncio
+    async def test_get_qa_result_mixed_fail_and_blocked_steps(self, mission_uuid, qa_contract):
+        """fail and blocked steps land in their respective lists (failed_steps stays fail-only)."""
+        from groundtruther_mcp.tools_qa import get_qa_result
+
+        proof = _make_qa_proof(
+            [("s1", "fail", "Login form 500s"),
+             ("s2", "blocked", "Cannot proceed past login")],
+            "fail")
+        task = _make_task_response(mission_uuid, qa_contract, status="PROOF_SUBMITTED", proofs=[proof])
+        patcher, mock_client = _mock_http("get", 200, task)
+        try:
+            response = json.loads(await get_qa_result(mission_uuid))
+            assert [s["id"] for s in response["failed_steps"]] == ["s1"]
+            assert [s["id"] for s in response["blocked_steps"]] == ["s2"]
+            assert response["blocked_steps"][0]["observed"] == "Cannot proceed past login"
+            # No claim-request lookup for a submitted mission — single API call.
+            mock_client.get.assert_called_once()
+        finally:
+            patcher.stop()
+
+    @pytest.mark.asyncio
+    async def test_get_qa_result_claim_requested(self, mission_uuid, qa_contract):
+        """OPEN task with a pending claim request: the approval gate is surfaced."""
+        from groundtruther_mcp.tools_qa import get_qa_result
+
+        task = _make_task_response(mission_uuid, qa_contract, status="OPEN")
+        claim_requests = {"results": [
+            {"id": "cr-pending-1", "status": "pending",
+             "created_at": "2026-08-30T12:00:00Z"},
+            {"id": "cr-declined-1", "status": "declined",
+             "created_at": "2026-08-30T11:00:00Z"},
+        ]}
+        patcher, mock_client = _mock_http_seq("get", [(200, task), (200, claim_requests)])
+        try:
+            response = json.loads(await get_qa_result(mission_uuid))
+            assert response["status"] == "claim_requested"
+            assert response["pending_claim_requests"] == [
+                {"request_id": "cr-pending-1", "created_at": "2026-08-30T12:00:00Z"},
+            ]
+            assert "respond_to_claim_request" in response["next_action"]
+            assert "list_pending_claim_requests" in response["next_action"]
+            # The claim-request lookup is scoped to this mission.
+            cr_call = mock_client.get.call_args_list[1]
+            assert "/agent/claim-requests/" in cr_call[0][0]
+            assert cr_call[1]["params"]["mission_uuid"] == mission_uuid
+        finally:
+            patcher.stop()
+
+    @pytest.mark.asyncio
+    async def test_get_qa_result_pending_when_no_claim_requests(self, mission_uuid, qa_contract):
+        """OPEN task with an empty claim-request list stays status=pending."""
+        from groundtruther_mcp.tools_qa import get_qa_result
+
+        task = _make_task_response(mission_uuid, qa_contract, status="OPEN")
+        patcher, mock_client = _mock_http_seq("get", [(200, task), (200, {"results": []})])
+        try:
+            response = json.loads(await get_qa_result(mission_uuid))
+            assert response["status"] == "pending"
+            assert "pending_claim_requests" not in response
+            assert mock_client.get.call_count == 2
+        finally:
+            patcher.stop()
+
+    @pytest.mark.asyncio
+    async def test_get_qa_result_claim_request_lookup_failure_is_non_fatal(
+            self, mission_uuid, qa_contract):
+        """A failing claim-request lookup degrades to the plain status, not an error."""
+        import httpx as _httpx
+        from groundtruther_mcp.tools_qa import get_qa_result
+
+        task = _make_task_response(mission_uuid, qa_contract, status="OPEN")
+        patcher, _ = _mock_http_seq(
+            "get", [(200, task), _httpx.RequestError("boom")])
+        try:
+            response = json.loads(await get_qa_result(mission_uuid))
+            assert response["status"] == "pending"
+            assert "error" not in response
         finally:
             patcher.stop()
 

@@ -192,6 +192,35 @@ TOOL_CONTRACTS = [
         "requires_api_key": False,  # public endpoint
         "tag": "public",
     },
+    {
+        "tool": "list_pending_claim_requests",
+        "path": "/api/v1/agent/claim-requests/",
+        "method": "get",
+        "requires_api_key": True,
+        "tag": "agent",
+    },
+    {
+        "tool": "respond_to_claim_request_approve",
+        "path": "/api/v1/tasks/{task_id}/claim-requests/{request_id}/approve/",
+        "method": "post",
+        "requires_api_key": True,
+        "tag": "agent",
+    },
+    {
+        # Same MCP tool as approve; the decline endpoint is tagged 'worker'
+        # in the schema (shared serializer surface) so no tag assertion here.
+        "tool": "respond_to_claim_request_decline",
+        "path": "/api/v1/tasks/{task_id}/claim-requests/{request_id}/decline/",
+        "method": "post",
+        "requires_api_key": True,
+    },
+    {
+        "tool": "escalate_mission",
+        "path": "/api/v1/tasks/{id}/escalate/",
+        "method": "post",
+        "requires_api_key": True,
+        "tag": "agent",
+    },
 ]
 
 
@@ -313,6 +342,9 @@ class TestAgentEndpointCompleteness:
             "POST /api/v1/webhooks/",
             "DELETE /api/v1/webhooks/{id}/",
             "POST /api/v1/tasks/{id}/drop/",  # Worker-primary; agents use cancel_mission instead
+            # Worker withdrawing their OWN pending claim request — despite the
+            # 'agent' tag in the schema, agents have no business calling it.
+            "POST /api/v1/tasks/{task_id}/claim-requests/{request_id}/cancel/",
         }
 
         unexpected = [e for e in uncovered if e not in known_exceptions]

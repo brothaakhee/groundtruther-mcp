@@ -73,8 +73,11 @@ Or with `uvx` (no install needed):
 
 | Tool | Description |
 |------|-------------|
+| `list_pending_claim_requests` | List workers' claim requests waiting on your approval (worker stats + pitch note included) |
+| `respond_to_claim_request` | Approve or decline a worker's claim request (action: "approve" or "decline") |
 | `approve_mission` | Approve submitted proof and release payment to worker |
 | `reject_mission` | Reject proof with a reason — worker can resubmit |
+| `escalate_mission` | Escalate a disputed/stuck mission for GroundTruther arbitration |
 | `cancel_mission` | Cancel a mission (immediate for OPEN/CLAIMED, mutual consent for IN_PROGRESS) |
 | `respond_to_cancellation` | Approve or decline a worker's drop request (action: "approve" or "decline") |
 
@@ -82,8 +85,8 @@ Or with `uvx` (no install needed):
 
 | Tool | Description |
 |------|-------------|
-| `request_qa_test` | Hire a human tester to run a scripted test on a staging URL — steps JSON (`instruction`/`expected`, ids auto-assigned), budget, deadline, optional environment + credentials note |
-| `get_qa_result` | Get the structured verdict for a QA mission — per-step pass/fail/blocked, pre-joined `failed_steps` with repro context, screen-recording link, tester environment, and a `next_action` hint |
+| `request_qa_test` | Hire a human tester to run a scripted test on a staging URL — steps JSON (`instruction`/`expected`, ids auto-assigned), budget, deadline, optional environment + credentials note. Tester claims need your approval (see `respond_to_claim_request`) unless auto-approval applies |
+| `get_qa_result` | Get the structured verdict for a QA mission — per-step pass/fail/blocked, pre-joined `failed_steps` + `blocked_steps` with repro context, screen-recording link, tester environment, a `next_action` hint, and `claim_requested` status when a tester is waiting on your approval |
 
 ### Communication
 
@@ -91,7 +94,7 @@ Or with `uvx` (no install needed):
 |------|-------------|
 | `send_message` | Send a message to the worker on a mission |
 | `get_messages` | Get full conversation history (also marks messages as read) |
-| `poll_events` | Poll for events — mission_claimed, proof_submitted, mission_completed, etc. |
+| `poll_events` | Poll for events — claim_request_received, task_claimed, proof_submitted, task_completed, etc. |
 
 ### Reviews & Reference
 
@@ -99,6 +102,20 @@ Or with `uvx` (no install needed):
 |------|-------------|
 | `submit_review` | Rate a worker 1-5 after mission completion |
 | `get_categories` | List available mission categories with display metadata |
+| `submit_feedback` | Send product feedback or a bug report to the GroundTruther team |
+
+### On-chain Escrow (devnet; requires `GT_ESCROW_ENABLED` + `GT_SOLANA_PAYER_SK` for one-call signing)
+
+| Tool | Description |
+|------|-------------|
+| `post_mission_onchain` | Create a USDC escrow mission — builds the fund tx server-side, signs locally, submits |
+| `get_mission_status` | On-chain mission status (onchain_status, deadlines, events); `refresh=true` forces a chain re-sync |
+| `assign_worker_onchain` | Approve a worker for an on-chain mission (payer co-sign) |
+| `release_mission` | Pay the worker and close the mission (also withdraws a dispute you raised) |
+| `dispute_mission` | Dispute submitted proof during the review window |
+| `escalate_mission_onchain` | Request GroundTruther arbitration on a mission you've disputed |
+| `cancel_escrow_mission` | Cancel an unassigned funded mission and refund yourself |
+| `submit_signed_mission` | Mode-B fund completion: submit a fund tx signed with an external wallet |
 
 ## Example Workflow
 
@@ -142,7 +159,9 @@ Missions can also be `CANCELLED` (by agent) or `EXPIRED` (past deadline).
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `GT_API_KEY` | Yes | — | Your agent API key (`gt_sk_...`) |
-| `GT_API_URL` | No | `http://localhost:8000/api/v1` | API base URL |
+| `GT_API_URL` | No | `http://localhost:8001/api/v1` | API base URL (default matches the local docker-compose stack) |
+| `GT_ESCROW_ENABLED` | No | `false` | Enable the on-chain escrow tools |
+| `GT_SOLANA_PAYER_SK` | No | — | Local payer secret key for escrow signing (never leaves your machine) |
 
 ## Development
 
