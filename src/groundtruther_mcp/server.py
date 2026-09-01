@@ -742,6 +742,7 @@ def main():
         environment: str | None = None,
         credentials_note: str | None = None,
         title: str | None = None,
+        escrow: bool = False,
     ) -> str:
         """
         Hire a human tester to run a scripted QA test against your staging URL.
@@ -751,6 +752,21 @@ def main():
         (pass / fail / blocked) plus what they actually observed on any non-passing
         step. Use this right after deploying a change you want a real human to verify
         — real browsers, real clicks, real judgment.
+
+        PAYMENT MODES:
+        - Default (custodial): the budget is reserved from your GroundTruther
+          platform balance and released to the tester when you approve_mission.
+        - escrow=True (pay from your own wallet — devnet today): the same
+          validated test contract is posted as an on-chain USDC escrow mission
+          funded from YOUR Solana wallet in this one call. The backend builds an
+          unsigned fund transaction; this process signs it locally with
+          GT_SOLANA_PAYER_SK (the key never leaves your machine) and submits it.
+          GroundTruther never holds your funds — payment releases to the tester
+          straight from the audited escrow via release_mission (approve_mission
+          does not apply). Requires GT_SOLANA_PAYER_SK and an escrow-enabled
+          agent (concierge onboarding — ask the GroundTruther team). Escrow QA
+          missions are created with auto_claim: a vetted tester claims instantly
+          via gas-sponsored transactions instead of the claim-approval gate.
 
         WRITING EFFECTIVE TEST STEPS:
         - One action per step. "Click 'Add to cart' on the first product" not
@@ -789,11 +805,16 @@ def main():
             credentials_note: Test account credentials or access instructions the
                 tester needs (never use real user credentials)
             title: Optional mission title; auto-generated from the staging host when omitted
+            escrow: Pay from your own Solana wallet via on-chain escrow instead of
+                your custodial balance (see PAYMENT MODES above; devnet today)
 
         Returns:
             JSON string with task_id, status, and a one-line 'next' hint, or an
-            error. Validation problems (bad URL, empty/duplicate/malformed steps)
-            are caught client-side with instructive messages before any API call.
+            error. With escrow=True the response additionally carries
+            mode="escrow", onchain_status, mission_pda and fund_sig (the on-chain
+            funding signature). Validation problems (bad URL, empty/duplicate/
+            malformed steps) are caught client-side with instructive messages
+            before any API call.
         """
         return await request_qa_test(
             staging_url=staging_url,
@@ -803,6 +824,7 @@ def main():
             environment=environment,
             credentials_note=credentials_note,
             title=title,
+            escrow=escrow,
         )
 
     @mcp.tool(name="get_qa_result")
@@ -830,12 +852,19 @@ def main():
         - notes: the tester's free-text summary
         - next_action: what to do now (e.g. approve a claim request, approve the
           result, fix and re-request, wait)
+        - mode="escrow" (+ onchain_status, mission_pda): present at review time
+          when the mission was created with request_qa_test(escrow=True) — i.e.
+          paid from your own wallet via on-chain escrow. On escrow missions,
+          next_action points at release_mission / dispute_mission instead of
+          approve_mission / reject_mission.
 
         ACTING ON RESULTS:
         - status=claim_requested: a tester wants the mission — approve or decline
           promptly via respond_to_claim_request; they may be available right now.
         - verdict=pass + awaiting_review: verify the recording, then approve_mission
-          to pay the tester (and submit_review right after).
+          to pay the tester (and submit_review right after). On an escrow mission
+          (mode="escrow"), pay with release_mission instead — it signs the on-chain
+          release with your payer key.
         - verdict=fail: the fail report IS the deliverable — approve it, then fix the
           failed_steps (observed tells you what actually happened) and call
           request_qa_test again to re-verify.

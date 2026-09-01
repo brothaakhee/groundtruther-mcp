@@ -7,12 +7,15 @@ URL as evidence. The tester's verdict comes back as a `structured_data` proof wi
 """
 import ipaddress
 import json
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 import httpx
 from .client import APIClient
+from .solana_signer import SolanaSigner
 from .tools import _error_response
+from .tools_escrow import create_and_fund_escrow_mission
 
 MAX_QA_STEPS = 30
 RECORDING_URL_KEY = "screen_recording"
@@ -186,6 +189,60 @@ def _compose_tester_notes(
     return "\n".join(lines)
 
 
+_MISSING_PAYER_KEY_ERROR = (
+    "escrow mode pays from your own wallet; set GT_SOLANA_PAYER_SK (your Solana payer "
+    "secret key — it never leaves this machine) — see docs/qa-vertical-escrow.md. "
+    "For external-wallet signing use post_mission_onchain instead (Mode B), or drop "
+    "escrow=True to pay from your custodial GroundTruther balance."
+)
+
+
+def _escrow_create_error_message(err: Dict[str, Any]) -> str:
+    """Compose an instructive error for a failed escrow create/fund from tools_escrow's
+    error info ({"stage", "status_code", "data"})."""
+    status_code = err["status_code"]
+    data = err["data"]
+    detail = data.get("detail") if isinstance(data, dict) else data
+    if err["stage"] == "create" and status_code == 403:
+        return (
+            f"Escrow is not enabled for your agent yet ({detail}). Enablement is "
+            "currently concierge onboarding: ask the GroundTruther team to set "
+            "escrow_enabled=True (and optionally default_payer_pubkey) on your agent "
+            "— see docs/qa-vertical-escrow.md. Meanwhile, request_qa_test without "
+            "escrow=True pays from your custodial balance and works today."
+        )
+    if err["stage"] == "create" and status_code == 404:
+        return (
+            "Escrow endpoints are not available on this deployment (HTTP 404) — "
+            "on-chain escrow may be globally disabled (GT_ESCROW_ENABLED on the "
+            "server). Use request_qa_test without escrow=True, or ask the "
+            "GroundTruther team about escrow availability."
+        )
+    return f"escrow {err['stage']} failed (HTTP {status_code}): {data}"
+
+
+def _escrow_next_hint() -> str:
+    """The 'what happens now' hint for a freshly funded escrow QA mission."""
+    return (
+        "Mission funded from your own wallet — the USDC now sits in the on-chain "
+        "escrow, not with GroundTruther. A vetted human tester can claim instantly "
+        "(auto_claim, gas-sponsored), run the script, and submit a screen recording "
+        "plus per-step verdicts — poll get_qa_result(task_id) for the outcome. When "
+        "the verdict is in, verify the recording and pay the tester with "
+        "release_mission(task_id) (NOT approve_mission — this is an escrow "
+        "mission); use dispute_mission if the evidence doesn't back the verdicts. "
+        "If you go silent, the escrow auto-releases to the tester after the review "
+        "window."
+    )
+
+
+def _escrow_configured() -> bool:
+    """Whether this MCP process is escrow-aware (payer key or escrow flag set)."""
+    if os.getenv("GT_SOLANA_PAYER_SK"):
+        return True
+    return os.getenv("GT_ESCROW_ENABLED", "").strip().lower() in ("1", "true", "yes")
+
+
 async def request_qa_test(
     staging_url: str,
     steps: str,
@@ -194,12 +251,24 @@ async def request_qa_test(
     environment: Optional[str] = None,
     credentials_note: Optional[str] = None,
     title: Optional[str] = None,
+    escrow: bool = False,
 ) -> str:
     """
     Request a human QA test run of a staging URL.
 
     Creates a DIGITAL_REMOTE mission whose acceptance contract carries the test
     script (qa_script) and requires a screen-recording URL as proof.
+
+    Two payment modes:
+    - escrow=False (default, custodial): the budget is reserved from your
+      GroundTruther platform balance and released on approve_mission.
+    - escrow=True (self-custody, devnet today): the SAME validated contract is
+      posted as an on-chain USDC escrow mission funded from YOUR wallet. The
+      backend builds an unsigned fund transaction, this process signs it locally
+      with GT_SOLANA_PAYER_SK (the key never leaves your machine) and submits
+      it. Payment is released with release_mission, not approve_mission.
+      Requires GT_SOLANA_PAYER_SK and an escrow-enabled agent — see
+      docs/qa-vertical-escrow.md.
 
     Args:
         staging_url: http(s) URL of the app under test. Must be reachable by an
@@ -209,16 +278,25 @@ async def request_qa_test(
                      http://localhost:PORT` or ngrok) and pass the tunnel URL
         steps: JSON string — list of {instruction, expected} objects, optionally
                with explicit unique 'id's ("s1".."sN" auto-assigned when missing)
-        budget: USD reserved for the tester (default 15.0)
+        budget: USD reserved for the tester (default 15.0). Escrow missions are
+                bounded server-side (~$1-$100 on devnet)
         deadline_hours: Hours from now until the mission expires (default 24)
         environment: Optional browser/device ask (e.g. "Chrome desktop")
         credentials_note: Optional test-account/access instructions for the tester
         title: Optional mission title (auto-generated when omitted)
+        escrow: Pay from your own Solana wallet via on-chain escrow (see above)
 
     Returns:
         JSON string with task_id, status, and a one-line 'next' hint, or an error.
+        Escrow mode adds mode="escrow", onchain_status, mission_pda and fund_sig.
     """
     try:
+        signer: Optional[SolanaSigner] = None
+        if escrow:
+            signer = SolanaSigner()
+            if not signer.configured:
+                return _error_response(_MISSING_PAYER_KEY_ERROR)
+
         url_error = _validate_staging_url(staging_url)
         if url_error:
             return _error_response(url_error)
@@ -292,6 +370,37 @@ async def request_qa_test(
         }
 
         client = APIClient()
+
+        if escrow:
+            # Same validated contract, self-custody rails: POST /escrow/missions/
+            # with the agent's own payer, then sign + submit the fund tx locally
+            # (the create→sign→submit-fund sequence is shared with
+            # post_mission_onchain via create_and_fund_escrow_mission).
+            payload["payer_pubkey"] = signer.payer_pubkey
+            # The proven QA-escrow flow (docs/qa-vertical-escrow.md): vetted
+            # testers claim instantly via gas-sponsored transactions instead of
+            # the custodial claim-approval gate.
+            payload["auto_claim"] = True
+            result, err = await create_and_fund_escrow_mission(client, signer, payload)
+            if err:
+                return _error_response(_escrow_create_error_message(err))
+            # The signer is configured (checked above), so the helper always took
+            # the Mode-A path: result carries the submit-fund response fields.
+            mission = result.get("mission") or {}
+            output = {
+                "task_id": mission.get("task_id"),
+                # Same lowercase status vocabulary as get_qa_result.
+                "status": _agent_status("OPEN"),
+                "mode": "escrow",
+                "onchain_status": result.get("onchain_status"),
+                "mission_pda": mission.get("mission_pda"),
+                "fund_sig": result.get("fund_sig"),
+                "next": _escrow_next_hint(),
+            }
+            if reachability_warning:
+                output["warning"] = reachability_warning
+            return json.dumps(output)
+
         response = await client.post("/tasks/", data=payload)
         result = APIClient.handle_response(response)
 
@@ -412,8 +521,80 @@ async def _pending_claim_requests(client: APIClient, task_id: str) -> List[Dict[
         return []
 
 
-def _next_action(status: str, verdict: Optional[str]) -> str:
+async def _escrow_mission_lookup(client: APIClient, task_id: str) -> Optional[Dict[str, Any]]:
+    """Best-effort escrow-mission probe (None on any failure or for custodial missions).
+
+    The task detail (GET /tasks/{id}/) carries no escrow marker, so mode is
+    detected by asking the escrow surface directly: 200 means this task is an
+    on-chain mission; 403/404 (agent not escrow-enabled / escrow off / custodial
+    task) means custodial. Only called when this process is escrow-configured,
+    so pure-custodial setups keep their single-call reads.
+    """
+    if not _escrow_configured():
+        return None
+    try:
+        result = APIClient.handle_response(
+            await client.get(f"/escrow/missions/{task_id}/")
+        )
+        if result["status_code"] == 200 and isinstance(result["data"], dict):
+            return result["data"]
+    except Exception:  # noqa: BLE001 — never fail the status read on the probe
+        return None
+    return None
+
+
+def _escrow_next_action(status: str, verdict: Optional[str]) -> Optional[str]:
+    """Escrow-mode override for _next_action (None = fall through to the shared text).
+
+    On escrow missions payment moves on-chain: approval is release_mission (signs
+    a release tx with your payer key), rejection is dispute_mission, and
+    arbitration is escalate_mission_onchain.
+    """
+    if status == "awaiting_review":
+        if verdict == "fail":
+            return (
+                "verdict=fail — awaiting your review on an ESCROW mission: verify the "
+                "recording backs the verdicts, then pay the tester from escrow via "
+                "release_mission(task_id) (a documented fail is completed work; "
+                "approve_mission does not apply to escrow). Then fix the failed steps "
+                "and consider re-requesting a test. Use dispute_mission if the "
+                "evidence doesn't back the verdicts."
+            )
+        if verdict == "blocked":
+            return (
+                "verdict=blocked — the tester could not complete the run on this "
+                "ESCROW mission; read the observed notes and resolve the blocker "
+                "(access, environment, outage), then pay via release_mission(task_id) "
+                "or contest via dispute_mission (approve_mission does not apply to "
+                "escrow)."
+            )
+        if verdict == "pass":
+            return (
+                "verdict=pass — awaiting your review on an ESCROW mission: verify the "
+                "recording, then release payment from escrow via "
+                "release_mission(task_id) (approve_mission does not apply to escrow). "
+                "If you go silent, the escrow auto-releases after the review window."
+            )
+        return (
+            "awaiting your review on an ESCROW mission — pay via "
+            "release_mission(task_id) or contest via dispute_mission "
+            "(approve_mission does not apply to escrow)."
+        )
+    if status == "disputed":
+        return (
+            "the ESCROW mission is disputed — release_mission(task_id) withdraws the "
+            "dispute and pays the tester ('we worked it out'), or "
+            "escalate_mission_onchain(task_id) requests GroundTruther arbitration."
+        )
+    return None
+
+
+def _next_action(status: str, verdict: Optional[str], escrow: bool = False) -> str:
     """Compose the one-line 'what to do now' hint for the requesting agent."""
+    if escrow:
+        override = _escrow_next_action(status, verdict)
+        if override:
+            return override
     if status == "pending":
         return (
             "waiting for a tester to request the mission — check back later or use "
@@ -489,6 +670,11 @@ async def get_qa_result(task_id: str) -> str:
     surfaced as status "claim_requested" with a pending_claim_requests list —
     the approval gate is on the requesting agent, not the tester.
 
+    Works for both payment modes. On a mission created with escrow=True (paid
+    from the agent's own wallet), the review-stage response additionally carries
+    mode="escrow", onchain_status and mission_pda, and next_action points at
+    release_mission / dispute_mission instead of approve_mission / reject_mission.
+
     Args:
         task_id: UUID of a mission created via request_qa_test
 
@@ -550,6 +736,20 @@ async def get_qa_result(task_id: str) -> str:
                     for r in pending
                 ]
 
+        # Escrow-aware review guidance: on an escrow mission approval means
+        # release_mission (an on-chain release you sign), not approve_mission.
+        # Only probed in the states where the mode changes the next action, and
+        # only when this process is escrow-configured (see _escrow_mission_lookup).
+        escrow_mission = None
+        if raw_status in ("PROOF_SUBMITTED", "DISPUTED"):
+            escrow_mission = await _escrow_mission_lookup(client, task_id)
+            if escrow_mission is not None:
+                output["mode"] = "escrow"
+                if escrow_mission.get("onchain_status"):
+                    output["onchain_status"] = escrow_mission["onchain_status"]
+                if escrow_mission.get("mission_pda"):
+                    output["mission_pda"] = escrow_mission["mission_pda"]
+
         qa_result = None
         if latest is not None:
             qa_result = (latest.get("structured_data") or {}).get("qa_result")
@@ -570,7 +770,9 @@ async def get_qa_result(task_id: str) -> str:
             if recording:
                 output["recording_url"] = recording
 
-        output["next_action"] = _next_action(status, verdict)
+        output["next_action"] = _next_action(
+            status, verdict, escrow=escrow_mission is not None
+        )
         return json.dumps(output)
 
     except httpx.RequestError as e:

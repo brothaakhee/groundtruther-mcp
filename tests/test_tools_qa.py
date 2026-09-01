@@ -8,15 +8,15 @@ from datetime import datetime, timedelta, timezone
 
 @pytest.fixture(autouse=True)
 def setup_api_key():
-    """Set up API key in environment for all tests."""
+    """Set up API key in environment for all tests (and keep escrow env vars from leaking)."""
     os.environ["GT_API_KEY"] = "gt_sk_test_123456789"
     os.environ["GT_API_URL"] = "http://localhost:8000/api/v1"
+    os.environ.pop("GT_SOLANA_PAYER_SK", None)
+    os.environ.pop("GT_ESCROW_ENABLED", None)
     yield
     # Cleanup after test
-    if "GT_API_KEY" in os.environ:
-        del os.environ["GT_API_KEY"]
-    if "GT_API_URL" in os.environ:
-        del os.environ["GT_API_URL"]
+    for var in ("GT_API_KEY", "GT_API_URL", "GT_SOLANA_PAYER_SK", "GT_ESCROW_ENABLED"):
+        os.environ.pop(var, None)
 
 
 @pytest.fixture
@@ -828,5 +828,375 @@ class TestGetQaResult:
             response = json.loads(await get_qa_result(mission_uuid))
             assert response["status"] == "cancelled"
             assert response["next_action"]
+        finally:
+            patcher.stop()
+
+
+PAYER_PUBKEY = "G9vPMFWDf12wBD2ShmD5V28sY2N2JRKYLxRYGz2RdS9b"
+MISSION_PDA = "8zHy5bSKuxqFUr8AgzL7LG8XddRtDrsbPpyuftRGaXCP"
+FUND_SIG = "28rJkHrDUZ6fngDGWftsUNqR2FJmE8ejfPK3BGtW9GQA8rSLJJfXGYEKdpDKEEbxYAoc6iqjk6hqLr4tEC8Yk7yv"
+
+
+def _mock_signer(configured=True):
+    """A SolanaSigner stand-in: configured, with a payer pubkey and a canned signature."""
+    signer = MagicMock()
+    signer.configured = configured
+    signer.payer_pubkey = PAYER_PUBKEY if configured else None
+    signer.sign_and_serialize.return_value = "c2lnbmVkLXR4"
+    return signer
+
+
+def _escrow_create_response(mission_uuid):
+    """POST /escrow/missions/ 201 body as the backend returns it."""
+    return {
+        "mission": {
+            "task_id": mission_uuid,
+            "onchain_status": "PENDING_FUND",
+            "mission_pda": MISSION_PDA,
+            "payer_pubkey": PAYER_PUBKEY,
+            "amount_base": 15_000_000,
+        },
+        "quote": {"amount_base": 15_000_000, "estimated_fee_bps": 1750},
+        "fund_transaction": {"tx_base64": "dW5zaWduZWQtdHg="},
+    }
+
+
+class TestRequestQaTestEscrow:
+    """Tests for request_qa_test(escrow=True) — pay from the agent's own wallet."""
+
+    @pytest.mark.asyncio
+    async def test_escrow_happy_path_creates_signs_and_funds(
+            self, mission_uuid, staging_url, steps_json):
+        """escrow=True posts the same QA contract to /escrow/missions/, signs the fund
+        tx locally, submits it, and returns the escrow-shaped response."""
+        from groundtruther_mcp.tools_qa import request_qa_test
+
+        signer = _mock_signer()
+        patcher, mock_client = _mock_http_seq("post", [
+            (201, _escrow_create_response(mission_uuid)),
+            (200, {"onchain_status": "FUNDED", "fund_sig": FUND_SIG}),
+        ])
+        try:
+            with patch("groundtruther_mcp.tools_qa.SolanaSigner", return_value=signer):
+                result = await request_qa_test(
+                    staging_url=staging_url, steps=steps_json, escrow=True)
+
+            # Call 1: escrow create with the SAME validated QA contract + payer.
+            create_call = mock_client.post.call_args_list[0]
+            assert "/escrow/missions/" in create_call[0][0]
+            payload = create_call[1]["json"]
+            assert payload["category"] == "DIGITAL_REMOTE"
+            assert payload["budget_amount"] == 15.0
+            assert payload["payer_pubkey"] == PAYER_PUBKEY
+            assert payload["auto_claim"] is True
+
+            contract = payload["acceptance_contract"]
+            assert contract["qa_script"]["staging_url"] == staging_url
+            assert [s["id"] for s in contract["qa_script"]["steps"]] == ["login", "checkout"]
+            recording = [u for u in contract["required_urls"] if u["key"] == "screen_recording"]
+            assert len(recording) == 1 and recording[0]["required"] is True
+            assert "screen recording" in contract["notes"].lower()
+
+            # The unsigned fund tx was signed locally and submitted.
+            signer.sign_and_serialize.assert_called_once_with("dW5zaWduZWQtdHg=")
+            fund_call = mock_client.post.call_args_list[1]
+            assert f"/escrow/missions/{mission_uuid}/submit-fund/" in fund_call[0][0]
+            assert fund_call[1]["json"] == {"signed_tx_base64": "c2lnbmVkLXR4"}
+
+            response = json.loads(result)
+            assert response["task_id"] == mission_uuid
+            assert response["status"] == "pending"
+            assert response["mode"] == "escrow"
+            assert response["onchain_status"] == "FUNDED"
+            assert response["mission_pda"] == MISSION_PDA
+            assert response["fund_sig"] == FUND_SIG
+            assert "release_mission" in response["next"]
+            assert "warning" not in response
+        finally:
+            patcher.stop()
+
+    @pytest.mark.asyncio
+    async def test_escrow_private_url_still_warns(self, mission_uuid, steps_json):
+        """The reachability warning applies in escrow mode too."""
+        from groundtruther_mcp.tools_qa import request_qa_test
+
+        patcher, _ = _mock_http_seq("post", [
+            (201, _escrow_create_response(mission_uuid)),
+            (200, {"onchain_status": "FUNDED", "fund_sig": FUND_SIG}),
+        ])
+        try:
+            with patch("groundtruther_mcp.tools_qa.SolanaSigner", return_value=_mock_signer()):
+                result = await request_qa_test(
+                    staging_url="http://localhost:5173", steps=steps_json, escrow=True)
+            response = json.loads(result)
+            assert response["mode"] == "escrow"
+            assert "Testers can't reach localhost" in response["warning"]
+        finally:
+            patcher.stop()
+
+    @pytest.mark.asyncio
+    async def test_escrow_missing_payer_key_is_instructive(self, staging_url, steps_json):
+        """escrow=True without GT_SOLANA_PAYER_SK fails fast with setup guidance."""
+        from groundtruther_mcp.tools_qa import request_qa_test
+
+        patcher, mock_client = _mock_http("post", 201, {})
+        try:
+            result = await request_qa_test(
+                staging_url=staging_url, steps=steps_json, escrow=True)
+
+            mock_client.post.assert_not_called()
+            error = json.loads(result)["error"]
+            assert "GT_SOLANA_PAYER_SK" in error
+            assert "docs/qa-vertical-escrow.md" in error
+            assert "own wallet" in error
+        finally:
+            patcher.stop()
+
+    @pytest.mark.asyncio
+    async def test_escrow_validation_still_runs_before_any_api_call(self, staging_url):
+        """Client-side step validation applies unchanged in escrow mode."""
+        from groundtruther_mcp.tools_qa import request_qa_test
+
+        patcher, mock_client = _mock_http("post", 201, {})
+        try:
+            with patch("groundtruther_mcp.tools_qa.SolanaSigner", return_value=_mock_signer()):
+                result = await request_qa_test(
+                    staging_url=staging_url, steps="[]", escrow=True)
+            mock_client.post.assert_not_called()
+            assert "steps" in json.loads(result)["error"]
+        finally:
+            patcher.stop()
+
+    @pytest.mark.asyncio
+    async def test_escrow_agent_not_enabled_403_surfaces_concierge_onboarding(
+            self, staging_url, steps_json):
+        """A backend 403 (agent not escrow_enabled) explains the concierge onboarding path."""
+        from groundtruther_mcp.tools_qa import request_qa_test
+
+        patcher, _ = _mock_http(
+            "post", 403, {"detail": "on-chain escrow is not enabled for this agent."})
+        try:
+            with patch("groundtruther_mcp.tools_qa.SolanaSigner", return_value=_mock_signer()):
+                result = await request_qa_test(
+                    staging_url=staging_url, steps=steps_json, escrow=True)
+
+            error = json.loads(result)["error"]
+            assert "on-chain escrow is not enabled for this agent" in error
+            assert "escrow_enabled" in error
+            assert "GroundTruther team" in error
+            assert "docs/qa-vertical-escrow.md" in error
+        finally:
+            patcher.stop()
+
+    @pytest.mark.asyncio
+    async def test_escrow_globally_disabled_404_is_explained(self, staging_url, steps_json):
+        """A backend 404 on create (escrow globally off) is explained, not left cryptic."""
+        from groundtruther_mcp.tools_qa import request_qa_test
+
+        patcher, _ = _mock_http("post", 404, {"detail": "Not found."})
+        try:
+            with patch("groundtruther_mcp.tools_qa.SolanaSigner", return_value=_mock_signer()):
+                result = await request_qa_test(
+                    staging_url=staging_url, steps=steps_json, escrow=True)
+
+            error = json.loads(result)["error"]
+            assert "not available on this deployment" in error
+            assert "GT_ESCROW_ENABLED" in error
+        finally:
+            patcher.stop()
+
+    @pytest.mark.asyncio
+    async def test_escrow_submit_fund_failure_surfaces_stage_and_detail(
+            self, mission_uuid, staging_url, steps_json):
+        """A failed fund submission surfaces the stage and backend detail."""
+        from groundtruther_mcp.tools_qa import request_qa_test
+
+        patcher, _ = _mock_http_seq("post", [
+            (201, _escrow_create_response(mission_uuid)),
+            (400, {"detail": "Blockhash expired; rebuild the transaction."}),
+        ])
+        try:
+            with patch("groundtruther_mcp.tools_qa.SolanaSigner", return_value=_mock_signer()):
+                result = await request_qa_test(
+                    staging_url=staging_url, steps=steps_json, escrow=True)
+
+            error = json.loads(result)["error"]
+            assert "submit-fund failed" in error
+            assert "400" in error
+            assert "Blockhash expired" in error
+        finally:
+            patcher.stop()
+
+    @pytest.mark.asyncio
+    async def test_custodial_mode_unchanged_by_escrow_feature(
+            self, mission_uuid, staging_url, steps_json):
+        """escrow=False (default) still posts to /tasks/ with the original return shape."""
+        from groundtruther_mcp.tools_qa import request_qa_test
+
+        patcher, mock_client = _mock_http("post", 201, {"id": mission_uuid, "status": "OPEN"})
+        try:
+            result = await request_qa_test(staging_url=staging_url, steps=steps_json)
+
+            call_args = mock_client.post.call_args
+            assert "/tasks/" in call_args[0][0]
+            assert "/escrow/" not in call_args[0][0]
+            payload = call_args[1]["json"]
+            assert "payer_pubkey" not in payload
+            assert "auto_claim" not in payload
+
+            response = json.loads(result)
+            assert set(response.keys()) == {"task_id", "status", "next"}
+        finally:
+            patcher.stop()
+
+
+class TestGetQaResultEscrow:
+    """get_qa_result on escrow missions: same joins, release_mission guidance."""
+
+    def _escrow_mission_detail(self, mission_uuid, onchain_status="IN_REVIEW"):
+        return {
+            "task_id": mission_uuid,
+            "onchain_status": onchain_status,
+            "mission_pda": MISSION_PDA,
+            "fund_sig": FUND_SIG,
+        }
+
+    @pytest.mark.asyncio
+    async def test_awaiting_review_pass_points_at_release_mission(
+            self, mission_uuid, qa_contract):
+        """On an escrow mission, approval guidance is release_mission, not approve_mission."""
+        from groundtruther_mcp.tools_qa import get_qa_result
+
+        os.environ["GT_ESCROW_ENABLED"] = "true"
+        proof = _make_qa_proof([("s1", "pass", None), ("s2", "pass", None)], "pass")
+        task = _make_task_response(mission_uuid, qa_contract, status="PROOF_SUBMITTED", proofs=[proof])
+        patcher, mock_client = _mock_http_seq("get", [
+            (200, task),
+            (200, self._escrow_mission_detail(mission_uuid)),
+        ])
+        try:
+            response = json.loads(await get_qa_result(mission_uuid))
+
+            # The joins are identical to custodial…
+            assert response["status"] == "awaiting_review"
+            assert response["overall_verdict"] == "pass"
+            assert response["failed_steps"] == []
+            assert response["recording_url"] == "https://loom.com/share/abc123"
+
+            # …but the mode and guidance are escrow-aware.
+            assert response["mode"] == "escrow"
+            assert response["onchain_status"] == "IN_REVIEW"
+            assert response["mission_pda"] == MISSION_PDA
+            assert "release_mission" in response["next_action"]
+            assert "approve_mission does not apply" in response["next_action"]
+
+            # The probe was scoped to this mission's escrow detail.
+            probe_call = mock_client.get.call_args_list[1]
+            assert f"/escrow/missions/{mission_uuid}/" in probe_call[0][0]
+        finally:
+            patcher.stop()
+
+    @pytest.mark.asyncio
+    async def test_awaiting_review_fail_joins_steps_and_points_at_release(
+            self, mission_uuid, qa_contract):
+        """A fail verdict on escrow keeps the pre-joined repro context + release guidance."""
+        from groundtruther_mcp.tools_qa import get_qa_result
+
+        os.environ["GT_ESCROW_ENABLED"] = "true"
+        proof = _make_qa_proof(
+            [("s1", "pass", None), ("s2", "fail", "Checkout returned a 500 error")], "fail")
+        task = _make_task_response(mission_uuid, qa_contract, status="PROOF_SUBMITTED", proofs=[proof])
+        patcher, _ = _mock_http_seq("get", [
+            (200, task),
+            (200, self._escrow_mission_detail(mission_uuid)),
+        ])
+        try:
+            response = json.loads(await get_qa_result(mission_uuid))
+            assert response["mode"] == "escrow"
+            assert response["failed_steps"] == [{
+                "id": "s2",
+                "instruction": "Add an item to cart and check out",
+                "expected": "Order confirmation page shown",
+                "observed": "Checkout returned a 500 error",
+            }]
+            assert "release_mission" in response["next_action"]
+            assert "fix the failed steps" in response["next_action"]
+        finally:
+            patcher.stop()
+
+    @pytest.mark.asyncio
+    async def test_disputed_escrow_offers_release_or_arbitration(
+            self, mission_uuid, qa_contract):
+        """DISPUTED escrow missions get the release-or-escalate dispute ladder."""
+        from groundtruther_mcp.tools_qa import get_qa_result
+
+        os.environ["GT_SOLANA_PAYER_SK"] = "fake-key-presence-only"
+        proof = _make_qa_proof([("s1", "fail", "Login broken")], "fail")
+        task = _make_task_response(mission_uuid, qa_contract, status="DISPUTED", proofs=[proof])
+        patcher, _ = _mock_http_seq("get", [
+            (200, task),
+            (200, self._escrow_mission_detail(mission_uuid, onchain_status="DISPUTED")),
+        ])
+        try:
+            response = json.loads(await get_qa_result(mission_uuid))
+            assert response["status"] == "disputed"
+            assert response["mode"] == "escrow"
+            assert "release_mission" in response["next_action"]
+            assert "escalate_mission_onchain" in response["next_action"]
+        finally:
+            patcher.stop()
+
+    @pytest.mark.asyncio
+    async def test_custodial_mission_with_escrow_env_stays_custodial(
+            self, mission_uuid, qa_contract):
+        """Escrow-configured process + custodial mission (probe 404): custodial guidance."""
+        from groundtruther_mcp.tools_qa import get_qa_result
+
+        os.environ["GT_ESCROW_ENABLED"] = "true"
+        proof = _make_qa_proof([("s1", "pass", None), ("s2", "pass", None)], "pass")
+        task = _make_task_response(mission_uuid, qa_contract, status="PROOF_SUBMITTED", proofs=[proof])
+        patcher, mock_client = _mock_http_seq("get", [
+            (200, task),
+            (404, {"detail": "Not found."}),
+        ])
+        try:
+            response = json.loads(await get_qa_result(mission_uuid))
+            assert "mode" not in response
+            assert "approve_mission" in response["next_action"]
+            assert mock_client.get.call_count == 2
+        finally:
+            patcher.stop()
+
+    @pytest.mark.asyncio
+    async def test_no_escrow_env_keeps_single_call_reads(self, mission_uuid, qa_contract):
+        """Without escrow env config there is no probe — custodial reads stay one call."""
+        from groundtruther_mcp.tools_qa import get_qa_result
+
+        proof = _make_qa_proof([("s1", "pass", None), ("s2", "pass", None)], "pass")
+        task = _make_task_response(mission_uuid, qa_contract, status="PROOF_SUBMITTED", proofs=[proof])
+        patcher, mock_client = _mock_http("get", 200, task)
+        try:
+            response = json.loads(await get_qa_result(mission_uuid))
+            assert "mode" not in response
+            assert "approve_mission" in response["next_action"]
+            mock_client.get.assert_called_once()
+        finally:
+            patcher.stop()
+
+    @pytest.mark.asyncio
+    async def test_probe_failure_is_non_fatal(self, mission_uuid, qa_contract):
+        """A network failure on the escrow probe degrades to custodial guidance, not an error."""
+        import httpx as _httpx
+        from groundtruther_mcp.tools_qa import get_qa_result
+
+        os.environ["GT_ESCROW_ENABLED"] = "true"
+        proof = _make_qa_proof([("s1", "pass", None), ("s2", "pass", None)], "pass")
+        task = _make_task_response(mission_uuid, qa_contract, status="PROOF_SUBMITTED", proofs=[proof])
+        patcher, _ = _mock_http_seq("get", [(200, task), _httpx.RequestError("boom")])
+        try:
+            response = json.loads(await get_qa_result(mission_uuid))
+            assert "error" not in response
+            assert response["status"] == "awaiting_review"
+            assert "mode" not in response
         finally:
             patcher.stop()

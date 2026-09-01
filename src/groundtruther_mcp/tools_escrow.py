@@ -5,7 +5,7 @@ agent's payer key (SolanaSigner, never sent to the backend) and submit the signe
 payer key is configured (Mode B), the unsigned transaction is returned for an external wallet.
 """
 import json
-from typing import Optional
+from typing import Any, Dict, Optional, Tuple
 
 import httpx
 
@@ -16,6 +16,41 @@ from .tools import _error_response
 
 def _signer() -> SolanaSigner:
     return SolanaSigner()
+
+
+async def create_and_fund_escrow_mission(
+    client: APIClient, signer: SolanaSigner, payload: Dict[str, Any]
+) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    """POST /escrow/missions/ then (Mode A) sign the fund tx locally and submit it.
+
+    Shared by post_mission_onchain and request_qa_test(escrow=True) so the
+    create→sign→submit-fund sequence lives in exactly one place.
+
+    Returns (result, error). On success, result is:
+      {"mode": "funded", "mission": ..., "quote": ..., **submit_fund_response}
+    or, when no payer key is configured (Mode B):
+      {"mode": "unsigned", "mission": ..., "quote": ..., "fund_transaction": ...}
+    On failure, error is {"stage": "create"|"submit-fund", "status_code": int, "data": ...}
+    so each caller can compose its own agent-facing message.
+    """
+    res = APIClient.handle_response(await client.post("/escrow/missions/", data=payload))
+    if res["status_code"] not in (200, 201):
+        return None, {"stage": "create", "status_code": res["status_code"], "data": res["data"]}
+    data = res["data"]
+    task_id = data["mission"]["task_id"]
+    fund = data.get("fund_transaction") or {}
+
+    if not signer.configured:
+        return {"mode": "unsigned", "mission": data["mission"],
+                "quote": data.get("quote"), "fund_transaction": fund}, None
+
+    signed = signer.sign_and_serialize(fund["tx_base64"])
+    sub = APIClient.handle_response(
+        await client.post(f"/escrow/missions/{task_id}/submit-fund/", data={"signed_tx_base64": signed}))
+    if sub["status_code"] != 200:
+        return None, {"stage": "submit-fund", "status_code": sub["status_code"], "data": sub["data"]}
+    return {"mode": "funded", "mission": data["mission"], "quote": data.get("quote"),
+            **sub["data"]}, None
 
 
 async def post_mission_onchain(
@@ -47,24 +82,11 @@ async def post_mission_onchain(
                 payload[k] = v
 
         client = APIClient()
-        res = APIClient.handle_response(await client.post("/escrow/missions/", data=payload))
-        if res["status_code"] not in (200, 201):
-            return _error_response(f"create failed (HTTP {res['status_code']}): {res['data']}")
-        data = res["data"]
-        task_id = data["mission"]["task_id"]
-        fund = data.get("fund_transaction") or {}
-
-        if not signer.configured:
-            return json.dumps({"mode": "unsigned", "mission": data["mission"],
-                               "quote": data.get("quote"), "fund_transaction": fund})
-
-        signed = signer.sign_and_serialize(fund["tx_base64"])
-        sub = APIClient.handle_response(
-            await client.post(f"/escrow/missions/{task_id}/submit-fund/", data={"signed_tx_base64": signed}))
-        if sub["status_code"] != 200:
-            return _error_response(f"submit-fund failed (HTTP {sub['status_code']}): {sub['data']}")
-        return json.dumps({"mode": "funded", "mission": data["mission"], "quote": data.get("quote"),
-                           **sub["data"]})
+        result, err = await create_and_fund_escrow_mission(client, signer, payload)
+        if err:
+            return _error_response(
+                f"{err['stage']} failed (HTTP {err['status_code']}): {err['data']}")
+        return json.dumps(result)
     except httpx.RequestError as e:
         return _error_response(f"Network error: {e}")
     except Exception as e:  # noqa: BLE001

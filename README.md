@@ -85,8 +85,8 @@ Or with `uvx` (no install needed):
 
 | Tool | Description |
 |------|-------------|
-| `request_qa_test` | Hire a human tester to run a scripted test on a staging URL — steps JSON (`instruction`/`expected`, ids auto-assigned), budget, deadline, optional environment + credentials note. Tester claims need your approval (see `respond_to_claim_request`) unless auto-approval applies |
-| `get_qa_result` | Get the structured verdict for a QA mission — per-step pass/fail/blocked, pre-joined `failed_steps` + `blocked_steps` with repro context, screen-recording link, tester environment, a `next_action` hint, and `claim_requested` status when a tester is waiting on your approval |
+| `request_qa_test` | Hire a human tester to run a scripted test on a staging URL — steps JSON (`instruction`/`expected`, ids auto-assigned), budget, deadline, optional environment + credentials note. Tester claims need your approval (see `respond_to_claim_request`) unless auto-approval applies. Pass `escrow=true` to fund the mission from your own Solana wallet via on-chain escrow in the same call (devnet; see below) |
+| `get_qa_result` | Get the structured verdict for a QA mission — per-step pass/fail/blocked, pre-joined `failed_steps` + `blocked_steps` with repro context, screen-recording link, tester environment, a `next_action` hint, and `claim_requested` status when a tester is waiting on your approval. Escrow-aware: on missions paid from your own wallet the response carries `mode: "escrow"` and `next_action` points at `release_mission` instead of `approve_mission` |
 
 ### Communication
 
@@ -116,6 +116,34 @@ Or with `uvx` (no install needed):
 | `escalate_mission_onchain` | Request GroundTruther arbitration on a mission you've disputed |
 | `cancel_escrow_mission` | Cancel an unassigned funded mission and refund yourself |
 | `submit_signed_mission` | Mode-B fund completion: submit a fund tx signed with an external wallet |
+
+## Paying from your own wallet (QA escrow, devnet)
+
+By default `request_qa_test` pays testers from your custodial GroundTruther balance.
+With `escrow=true`, the same validated test contract is posted as an on-chain USDC
+escrow mission funded from **your agent's own Solana wallet** in one call: the backend
+builds an unsigned fund transaction, this process signs it locally with
+`GT_SOLANA_PAYER_SK` (the key never leaves your machine) and submits it. GroundTruther
+never holds your funds — payment releases to the tester straight from the audited
+escrow program.
+
+```
+request_qa_test(staging_url="https://staging.example.com", steps=..., budget=5.0, escrow=true)
+→ {"task_id": ..., "status": "pending", "mode": "escrow", "onchain_status": "FUNDED",
+   "mission_pda": ..., "fund_sig": ..., "next": ...}
+```
+
+The loop differs from custodial in two places: escrow QA missions are created with
+`auto_claim` (a vetted tester claims instantly via gas-sponsored transactions — no
+claim-approval gate), and when the verdict lands you pay with `release_mission`
+(not `approve_mission`) or contest with `dispute_mission` / `escalate_mission_onchain`.
+`get_qa_result` tells you which mode you're in and what to call.
+
+Requirements: `GT_SOLANA_PAYER_SK` set (JSON byte array or base58 secret), a funded
+devnet wallet, and escrow enablement on your Agent record (currently concierge
+onboarding — ask the GroundTruther team). Devnet only today. Full setup, the proven
+end-to-end devnet run, and the contract template live in the repo's
+`docs/qa-vertical-escrow.md`.
 
 ## Example Workflow
 
