@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "groundtruther-mcp"
-version = "0.7.1"
+version = "0.7.2"
 description = "MCP server for GroundTruther — hire humans to complete real-world missions from your AI agent"
 readme = "README.md"
 license = "MIT"
@@ -28,6 +28,10 @@ dependencies = [
     "httpx>=0.25.0",
     "pydantic>=2.0.0",
     "solders>=0.21,<0.27",
+    # cryptography (via mcp -> pyjwt[crypto]) >= 49 ships arm64-only macOS wheels;
+    # on Intel Macs pip would fall back to the sdist and demand a Rust toolchain.
+    # 48.x is the last series with universal2 (x86_64-capable) macOS wheels.
+    "cryptography<49; sys_platform == 'darwin' and platform_machine == 'x86_64'",
 ]
 
 [project.optional-dependencies]

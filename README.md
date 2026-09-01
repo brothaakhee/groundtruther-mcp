@@ -172,6 +172,31 @@ pip install -e ".[dev]"
 pytest tests/ -v
 ```
 
+## Troubleshooting
+
+### Install fails building `cryptography` on Intel (x86_64) macOS
+
+Symptom: `pip install groundtruther-mcp` on an Intel Mac fails compiling
+`cryptography` from source with an error about a missing Rust toolchain
+(`error: can't find Rust compiler` / a `maturin`/`cargo` build failure).
+
+Why: `mcp` depends on `pyjwt[crypto]`, which pulls in `cryptography`.
+`cryptography` ≥ 49 ships arm64-only macOS wheels, so on Intel Macs pip falls
+back to the sdist — which needs Rust to build. `cryptography` 48.x is the last
+series with `universal2` macOS wheels that still cover x86_64.
+
+Fix — pin cryptography to the last Intel-wheel series:
+
+```bash
+pip install "cryptography<49" groundtruther-mcp
+```
+
+From v0.7.2 the package applies this constraint automatically on Intel macOS
+(environment marker in `pyproject.toml`), so a plain `pip install` works.
+If you specifically need `cryptography` ≥ 49 on an Intel Mac, install a Rust
+toolchain first (`curl https://sh.rustup.rs -sSf | sh`) and let it build from
+source.
+
 ## Publishing
 
 Bump the version in `pyproject.toml` and `src/groundtruther_mcp/__init__.py`, then run:
