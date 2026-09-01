@@ -183,6 +183,51 @@ class TestRequestQaTest:
             patcher.stop()
 
     @pytest.mark.asyncio
+    async def test_request_qa_test_public_url_has_no_warning(self, mission_uuid, staging_url, steps_json):
+        """A publicly reachable staging URL produces no reachability warning."""
+        from groundtruther_mcp.tools_qa import request_qa_test
+
+        patcher, _ = _mock_http("post", 201, {"id": mission_uuid, "status": "OPEN"})
+        try:
+            result = await request_qa_test(staging_url=staging_url, steps=steps_json)
+            assert "warning" not in json.loads(result)
+        finally:
+            patcher.stop()
+
+    @pytest.mark.asyncio
+    async def test_request_qa_test_private_url_warns_but_does_not_block(self, mission_uuid, steps_json):
+        """Loopback/private/internal staging URLs still post, but carry a tunnel-teaching warning."""
+        from groundtruther_mcp.tools_qa import request_qa_test
+
+        for url, host in [
+            ("http://localhost:5173", "localhost"),
+            ("http://127.0.0.1:8000", "127.0.0.1"),
+            ("http://[::1]:5173", "::1"),
+            ("http://192.168.1.10:3000", "192.168.1.10"),
+            ("http://10.0.0.5", "10.0.0.5"),
+            ("http://169.254.10.10", "169.254.10.10"),
+            ("https://myapp.local", "myapp.local"),
+            ("https://staging.internal", "staging.internal"),
+        ]:
+            patcher, mock_client = _mock_http("post", 201, {"id": mission_uuid, "status": "OPEN"})
+            try:
+                result = await request_qa_test(staging_url=url, steps=steps_json)
+
+                # Not blocked: the mission was still posted.
+                mock_client.post.assert_called_once()
+                response = json.loads(result)
+                assert response["task_id"] == mission_uuid
+
+                warning = response.get("warning")
+                assert warning, f"expected a reachability warning for {url}"
+                assert f"Testers can't reach {host}" in warning
+                assert "cloudflared tunnel --url http://localhost:PORT" in warning
+                assert "ngrok" in warning
+                assert "server may reject" in warning
+            finally:
+                patcher.stop()
+
+    @pytest.mark.asyncio
     async def test_request_qa_test_auto_assigns_step_ids(self, mission_uuid, staging_url):
         """Steps without ids get s1..sN assigned in order."""
         from groundtruther_mcp.tools_qa import request_qa_test

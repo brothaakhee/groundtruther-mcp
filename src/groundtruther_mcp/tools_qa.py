@@ -5,6 +5,7 @@ QA missions are ordinary DIGITAL_REMOTE tasks whose acceptance contract carries 
 URL as evidence. The tester's verdict comes back as a `structured_data` proof with
 `structured_data.qa_result` — validated server-side against the script.
 """
+import ipaddress
 import json
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -50,6 +51,49 @@ def _validate_staging_url(staging_url: str) -> Optional[str]:
             "Provide a full URL like 'https://staging.example.com'."
         )
     return None
+
+
+# Hostname suffixes that never resolve on the public internet (mDNS / internal zones).
+_UNREACHABLE_HOST_SUFFIXES = (".local", ".internal", ".localhost")
+
+
+def _staging_host_unreachable(host: Optional[str]) -> bool:
+    """Pure address classification (no network I/O): can an external tester reach `host`?
+
+    Mirrors the server's contract validator: loopback (localhost, 127.0.0.0/8, ::1),
+    private (RFC 1918 & friends), link-local, and .local/.internal/.localhost hosts
+    are unreachable from a tester's machine.
+    """
+    if not host:
+        return False
+    host = host.strip().lower().rstrip(".")
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        pass
+    else:
+        return ip.is_loopback or ip.is_private or ip.is_link_local
+    if host == "localhost":
+        return True
+    return any(host.endswith(suffix) for suffix in _UNREACHABLE_HOST_SUFFIXES)
+
+
+def _staging_url_reachability_warning(staging_url: str) -> Optional[str]:
+    """A warning (not a block) for staging URLs human testers can't reach.
+
+    The client can't know the server's environment (dev servers allow private
+    URLs for dogfooding), so this warns that the server may reject the mission
+    rather than refusing to send it.
+    """
+    host = urlparse(staging_url).hostname
+    if not _staging_host_unreachable(host):
+        return None
+    return (
+        f"Testers can't reach {host} — it's a loopback/private/internal address, "
+        "and the server may reject this mission. Expose your staging via a tunnel "
+        "(e.g. `cloudflared tunnel --url http://localhost:PORT` or ngrok) and use "
+        "that URL."
+    )
 
 
 def _parse_steps(steps: str) -> Tuple[Optional[List[Dict[str, str]]], Optional[str]]:
@@ -158,7 +202,11 @@ async def request_qa_test(
     script (qa_script) and requires a screen-recording URL as proof.
 
     Args:
-        staging_url: http(s) URL of the app under test
+        staging_url: http(s) URL of the app under test. Must be reachable by an
+                     external human tester — localhost/private/.local addresses
+                     draw a warning and production servers reject them; tunnel
+                     local apps first (e.g. `cloudflared tunnel --url
+                     http://localhost:PORT` or ngrok) and pass the tunnel URL
         steps: JSON string — list of {instruction, expected} objects, optionally
                with explicit unique 'id's ("s1".."sN" auto-assigned when missing)
         budget: USD reserved for the tester (default 15.0)
@@ -174,6 +222,9 @@ async def request_qa_test(
         url_error = _validate_staging_url(staging_url)
         if url_error:
             return _error_response(url_error)
+        # Warn (don't block) on hosts human testers can't reach — the server may
+        # reject the mission outright unless it's a dev stack.
+        reachability_warning = _staging_url_reachability_warning(staging_url)
 
         normalized_steps, steps_error = _parse_steps(steps)
         if steps_error:
@@ -246,7 +297,7 @@ async def request_qa_test(
 
         if result["status_code"] == 201:
             data = result["data"]
-            return json.dumps({
+            output = {
                 "task_id": data.get("id"),
                 # Same lowercase status vocabulary as get_qa_result ("pending", …).
                 "status": _agent_status(data.get("status")),
@@ -259,7 +310,10 @@ async def request_qa_test(
                     "and submits a screen recording plus per-step verdicts — poll "
                     "get_qa_result(task_id) for the outcome."
                 ),
-            })
+            }
+            if reachability_warning:
+                output["warning"] = reachability_warning
+            return json.dumps(output)
         elif result["status_code"] == 402:
             return _error_response(
                 result["data"].get("detail", "Payment required (insufficient funds)")
