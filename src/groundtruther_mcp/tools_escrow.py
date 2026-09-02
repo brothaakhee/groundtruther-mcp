@@ -30,8 +30,9 @@ async def create_and_fund_escrow_mission(
       {"mode": "funded", "mission": ..., "quote": ..., **submit_fund_response}
     or, when no payer key is configured (Mode B):
       {"mode": "unsigned", "mission": ..., "quote": ..., "fund_transaction": ...}
-    On failure, error is {"stage": "create"|"submit-fund", "status_code": int, "data": ...}
-    so each caller can compose its own agent-facing message.
+    On failure, error is {"stage": "create"|"submit-fund", "status_code": int, "data": ...};
+    submit-fund failures additionally carry "task_id" — the mission was already
+    created and sits OPEN-but-unfunded, and callers must tell the agent so.
     """
     res = APIClient.handle_response(await client.post("/escrow/missions/", data=payload))
     if res["status_code"] not in (200, 201):
@@ -48,9 +49,20 @@ async def create_and_fund_escrow_mission(
     sub = APIClient.handle_response(
         await client.post(f"/escrow/missions/{task_id}/submit-fund/", data={"signed_tx_base64": signed}))
     if sub["status_code"] != 200:
-        return None, {"stage": "submit-fund", "status_code": sub["status_code"], "data": sub["data"]}
+        return None, {"stage": "submit-fund", "status_code": sub["status_code"],
+                      "data": sub["data"], "task_id": task_id}
     return {"mode": "funded", "mission": data["mission"], "quote": data.get("quote"),
             **sub["data"]}, None
+
+
+def unfunded_mission_note(task_id) -> str:
+    """One-line state-hygiene note for a failed fund submission (e2e F4)."""
+    return (
+        f" NOTE: mission {task_id} was created and remains OPEN but UNFUNDED — "
+        "no tester will be paid from it. After fixing the cause, either retry "
+        "with a fresh request (a new mission) or clean it up with "
+        f"cancel_mission('{task_id}')."
+    )
 
 
 async def post_mission_onchain(
@@ -84,8 +96,10 @@ async def post_mission_onchain(
         client = APIClient()
         result, err = await create_and_fund_escrow_mission(client, signer, payload)
         if err:
-            return _error_response(
-                f"{err['stage']} failed (HTTP {err['status_code']}): {err['data']}")
+            msg = f"{err['stage']} failed (HTTP {err['status_code']}): {err['data']}"
+            if err.get("task_id"):
+                msg += unfunded_mission_note(err["task_id"])
+            return _error_response(msg)
         return json.dumps(result)
     except httpx.RequestError as e:
         return _error_response(f"Network error: {e}")

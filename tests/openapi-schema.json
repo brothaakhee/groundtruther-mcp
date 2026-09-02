@@ -865,6 +865,112 @@
                 }
             }
         },
+        "/api/v1/auth/wallet/challenge/": {
+            "post": {
+                "operationId": "wallet_challenge",
+                "description": "Issue a SIWS challenge for a Solana wallet.",
+                "tags": [
+                    "auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WalletChallengeRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WalletChallengeRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WalletChallengeRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WalletChallengeResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "description": "No response body"
+                    },
+                    "429": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/wallet/verify/": {
+            "post": {
+                "operationId": "wallet_verify",
+                "description": "Verify a signed SIWS challenge; provision or rotate the agent credential.",
+                "tags": [
+                    "auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WalletVerifyRequestRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WalletVerifyRequestRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WalletVerifyRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/WalletVerifyResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "description": "No response body"
+                    },
+                    "401": {
+                        "description": "No response body"
+                    },
+                    "409": {
+                        "description": "No response body"
+                    },
+                    "429": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
         "/api/v1/coinflow/webhook/": {
             "post": {
                 "operationId": "coinflow_webhook_create",
@@ -6482,6 +6588,13 @@
                         "nullable": true,
                         "description": "Immutable acceptance criteria contract for proof validation"
                     },
+                    "auto_approve_min_tier": {
+                        "type": "integer",
+                        "maximum": 3,
+                        "minimum": 0,
+                        "nullable": true,
+                        "description": "If set, claim requests from workers with tier >= this value are auto-approved at request time (skipping agent review). null means every claim request must be reviewed by the agent. Set at mission creation; not editable in Phase A."
+                    },
                     "created_at": {
                         "type": "string",
                         "format": "date-time",
@@ -6493,6 +6606,10 @@
                             "$ref": "#/components/schemas/TaskWaypointResponse"
                         },
                         "readOnly": true
+                    },
+                    "estimated_duration_minutes": {
+                        "type": "string",
+                        "readOnly": true
                     }
                 },
                 "required": [
@@ -6502,6 +6619,7 @@
                     "created_at",
                     "deadline",
                     "description",
+                    "estimated_duration_minutes",
                     "id",
                     "title",
                     "waypoints"
@@ -6573,6 +6691,10 @@
                     "is_qa_test": {
                         "type": "string",
                         "readOnly": true
+                    },
+                    "estimated_duration_minutes": {
+                        "type": "string",
+                        "readOnly": true
                     }
                 },
                 "required": [
@@ -6581,6 +6703,7 @@
                     "category",
                     "created_at",
                     "deadline",
+                    "estimated_duration_minutes",
                     "id",
                     "is_qa_test",
                     "title",
@@ -6777,6 +6900,10 @@
                     "is_qa_test": {
                         "type": "string",
                         "readOnly": true
+                    },
+                    "estimated_duration_minutes": {
+                        "type": "string",
+                        "readOnly": true
                     }
                 },
                 "required": [
@@ -6785,6 +6912,7 @@
                     "category",
                     "created_at",
                     "deadline",
+                    "estimated_duration_minutes",
                     "id",
                     "is_qa_test",
                     "title",
@@ -7035,6 +7163,14 @@
                         "type": "boolean",
                         "readOnly": true,
                         "default": false
+                    },
+                    "worker_payout_amount": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "platform_fee_percent": {
+                        "type": "string",
+                        "readOnly": true
                     }
                 },
                 "required": [
@@ -7044,8 +7180,10 @@
                     "created_at",
                     "deadline",
                     "id",
+                    "platform_fee_percent",
                     "title",
-                    "worker_has_rated"
+                    "worker_has_rated",
+                    "worker_payout_amount"
                 ]
             },
             "TaskMessage": {
@@ -7434,6 +7572,22 @@
                     "active_dispute": {
                         "type": "string",
                         "readOnly": true
+                    },
+                    "worker_payout_amount": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "platform_fee_percent": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "latest_rejection_reason": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "estimated_duration_minutes": {
+                        "type": "string",
+                        "readOnly": true
                     }
                 },
                 "required": [
@@ -7446,11 +7600,15 @@
                     "created_at",
                     "deadline",
                     "description",
+                    "estimated_duration_minutes",
                     "id",
+                    "latest_rejection_reason",
+                    "platform_fee_percent",
                     "proofs",
                     "template",
                     "title",
                     "waypoints",
+                    "worker_payout_amount",
                     "worker_rating",
                     "worker_stats"
                 ]
@@ -7883,6 +8041,51 @@
                     "tier"
                 ]
             },
+            "WalletChallengeRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "pubkey": {
+                        "type": "string",
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "pubkey"
+                ]
+            },
+            "WalletChallengeResponse": {
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string"
+                    },
+                    "nonce": {
+                        "type": "string"
+                    },
+                    "domain": {
+                        "type": "string"
+                    },
+                    "address": {
+                        "type": "string"
+                    },
+                    "issued_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "expiration_time": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                },
+                "required": [
+                    "address",
+                    "domain",
+                    "expiration_time",
+                    "issued_at",
+                    "message",
+                    "nonce"
+                ]
+            },
             "WalletDepositRequest": {
                 "type": "object",
                 "description": "Serializer for wallet deposit endpoint.\n\nStripe path uses only `amount` (a PaymentIntent client_secret is returned).\nCoinflow headless path additionally requires `card_token` plus expiry and\nbilling fields; the view enforces presence based on the active processor.",
@@ -8054,6 +8257,76 @@
                     "task_id",
                     "task_title",
                     "type"
+                ]
+            },
+            "WalletVerifyAgent": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "escrow_enabled": {
+                        "type": "boolean"
+                    },
+                    "default_payer_pubkey": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "default_payer_pubkey",
+                    "escrow_enabled",
+                    "id",
+                    "name"
+                ]
+            },
+            "WalletVerifyRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "pubkey": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "signature": {
+                        "type": "string",
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "pubkey",
+                    "signature"
+                ]
+            },
+            "WalletVerifyResponse": {
+                "type": "object",
+                "properties": {
+                    "api_key": {
+                        "type": "string"
+                    },
+                    "user_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "agent": {
+                        "$ref": "#/components/schemas/WalletVerifyAgent"
+                    },
+                    "created": {
+                        "type": "boolean"
+                    },
+                    "rotated": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "agent",
+                    "api_key",
+                    "created",
+                    "rotated",
+                    "user_id"
                 ]
             },
             "WebhookSubscription": {

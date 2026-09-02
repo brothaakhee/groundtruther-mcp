@@ -15,7 +15,7 @@ import httpx
 from .client import APIClient
 from .solana_signer import SolanaSigner
 from .tools import _error_response
-from .tools_escrow import create_and_fund_escrow_mission
+from .tools_escrow import create_and_fund_escrow_mission, unfunded_mission_note
 
 MAX_QA_STEPS = 30
 RECORDING_URL_KEY = "screen_recording"
@@ -218,7 +218,13 @@ def _escrow_create_error_message(err: Dict[str, Any]) -> str:
             "server). Use request_qa_test without escrow=True, or ask the "
             "GroundTruther team about escrow availability."
         )
-    return f"escrow {err['stage']} failed (HTTP {status_code}): {data}"
+    message = f"escrow {err['stage']} failed (HTTP {status_code}): {data}"
+    if err.get("task_id"):
+        # The create succeeded before funding failed: never leave a silent
+        # dangling OPEN mission (e2e F4). The backend detail already explains
+        # WHY (balance diagnosis on unfunded wallets); this explains the state.
+        message += unfunded_mission_note(err["task_id"])
+    return message
 
 
 def _escrow_next_hint() -> str:
@@ -543,13 +549,48 @@ async def _escrow_mission_lookup(client: APIClient, task_id: str) -> Optional[Di
     return None
 
 
-def _escrow_next_action(status: str, verdict: Optional[str]) -> Optional[str]:
+def _escrow_next_action(status: str, verdict: Optional[str],
+                        auto_claim: bool = False) -> Optional[str]:
     """Escrow-mode override for _next_action (None = fall through to the shared text).
 
     On escrow missions payment moves on-chain: approval is release_mission (signs
     a release tx with your payer key), rejection is dispute_mission, and
-    arbitration is escalate_mission_onchain.
+    arbitration is escalate_mission_onchain. Covers ALL states (e2e F3): the
+    pre-verdict states must never advise the custodial claim-approval gate on an
+    auto-claim mission — auto-claim has no approval step by design.
     """
+    _release_reminder = (
+        "when the verdict lands, review and pay from escrow via "
+        "release_mission(task_id) — approve_mission does not apply to escrow"
+    )
+    if status == "pending":
+        if auto_claim:
+            return (
+                "waiting for a tester — vetted testers claim this ESCROW mission "
+                "instantly (auto-claim, gas-sponsored; there is NO approval step "
+                "for you). Poll get_qa_result(task_id) for the outcome; "
+                + _release_reminder + ". If you go silent after the verdict, the "
+                "escrow auto-releases to the tester after the review window."
+            )
+        return (
+            "waiting for a tester to request this ESCROW mission — approve a "
+            "claim via list_pending_claim_requests / respond_to_claim_request; "
+            + _release_reminder + "."
+        )
+    if status == "claimed":
+        return ("a tester has claimed this ESCROW mission — the test run should "
+                "begin shortly; " + _release_reminder + ".")
+    if status == "in_progress":
+        return ("the tester is running the script on this ESCROW mission — check "
+                "back soon; " + _release_reminder + ".")
+    if status == "completed":
+        base = ("this ESCROW mission is complete — payment moved on-chain "
+                "(released from escrow); no payment action left")
+        if verdict == "fail":
+            return base + ". verdict=fail: fix the failed steps and consider re-requesting a test."
+        if verdict == "blocked":
+            return base + ". verdict=blocked: resolve the reported blocker and consider re-requesting a test."
+        return base + "."
     if status == "awaiting_review":
         if verdict == "fail":
             return (
@@ -589,10 +630,11 @@ def _escrow_next_action(status: str, verdict: Optional[str]) -> Optional[str]:
     return None
 
 
-def _next_action(status: str, verdict: Optional[str], escrow: bool = False) -> str:
+def _next_action(status: str, verdict: Optional[str], escrow: bool = False,
+                 auto_claim: bool = False) -> str:
     """Compose the one-line 'what to do now' hint for the requesting agent."""
     if escrow:
-        override = _escrow_next_action(status, verdict)
+        override = _escrow_next_action(status, verdict, auto_claim=auto_claim)
         if override:
             return override
     if status == "pending":
@@ -671,9 +713,11 @@ async def get_qa_result(task_id: str) -> str:
     the approval gate is on the requesting agent, not the tester.
 
     Works for both payment modes. On a mission created with escrow=True (paid
-    from the agent's own wallet), the review-stage response additionally carries
-    mode="escrow", onchain_status and mission_pda, and next_action points at
-    release_mission / dispute_mission instead of approve_mission / reject_mission.
+    from the agent's own wallet), the response carries mode="escrow",
+    onchain_status and mission_pda in EVERY state, and next_action points at
+    release_mission / dispute_mission instead of approve_mission /
+    reject_mission. Auto-claim escrow missions are never described as waiting
+    for claim approval (there is no approval gate).
 
     Args:
         task_id: UUID of a mission created via request_qa_test
@@ -721,9 +765,24 @@ async def get_qa_result(task_id: str) -> str:
             "blocked_steps": [],
         }
 
+        # Escrow awareness in ALL states (e2e F3): on an escrow mission payment
+        # moves on-chain, so every next_action must say release_mission — and an
+        # auto-claim mission must never be described as waiting for claim
+        # approval. Probed only when this process is escrow-configured (see
+        # _escrow_mission_lookup), so pure-custodial setups keep single-call reads.
+        escrow_mission = await _escrow_mission_lookup(client, task_id)
+        auto_claim = bool(escrow_mission.get("auto_claim")) if escrow_mission else False
+        if escrow_mission is not None:
+            output["mode"] = "escrow"
+            if escrow_mission.get("onchain_status"):
+                output["onchain_status"] = escrow_mission["onchain_status"]
+            if escrow_mission.get("mission_pda"):
+                output["mission_pda"] = escrow_mission["mission_pda"]
+
         # Approval gate: an OPEN/CLAIMED mission with pending claim requests is
         # waiting on the requesting agent's approve/decline, not on a tester.
-        if raw_status in ("OPEN", "CLAIMED"):
+        # Auto-claim escrow missions have NO approval gate — skip the lookup.
+        if raw_status in ("OPEN", "CLAIMED") and not (escrow_mission is not None and auto_claim):
             pending = await _pending_claim_requests(client, task_id)
             if pending:
                 status = "claim_requested"
@@ -735,20 +794,6 @@ async def get_qa_result(task_id: str) -> str:
                     }
                     for r in pending
                 ]
-
-        # Escrow-aware review guidance: on an escrow mission approval means
-        # release_mission (an on-chain release you sign), not approve_mission.
-        # Only probed in the states where the mode changes the next action, and
-        # only when this process is escrow-configured (see _escrow_mission_lookup).
-        escrow_mission = None
-        if raw_status in ("PROOF_SUBMITTED", "DISPUTED"):
-            escrow_mission = await _escrow_mission_lookup(client, task_id)
-            if escrow_mission is not None:
-                output["mode"] = "escrow"
-                if escrow_mission.get("onchain_status"):
-                    output["onchain_status"] = escrow_mission["onchain_status"]
-                if escrow_mission.get("mission_pda"):
-                    output["mission_pda"] = escrow_mission["mission_pda"]
 
         qa_result = None
         if latest is not None:
@@ -771,7 +816,7 @@ async def get_qa_result(task_id: str) -> str:
                 output["recording_url"] = recording
 
         output["next_action"] = _next_action(
-            status, verdict, escrow=escrow_mission is not None
+            status, verdict, escrow=escrow_mission is not None, auto_claim=auto_claim
         )
         return json.dumps(output)
 

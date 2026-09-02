@@ -82,8 +82,29 @@ class APIClient:
 
     async def _request_with_reauth(self, method: str, url: str, headers, *,
                                    use_auth: bool, params=None, json_data=None):
-        """One request, plus at most ONE retry after a wallet re-auth on 401."""
-        response = await self._send(method, url, headers, params, json_data)
+        """One request, plus at most ONE retry after a wallet re-auth.
+
+        The retry triggers on a 401 (key rotated/revoked elsewhere) OR on a
+        request TIMEOUT of an auth-carrying call: a stale key can stall
+        server-side past our timeout, so the promised 401 never reaches us —
+        treat the timeout as a potential stale-key symptom (wallet mode only).
+        Timeouts that survive the retry are re-raised with a real message
+        (str(httpx.ReadTimeout()) is empty, which used to surface as the
+        useless "Network error: ").
+        """
+        try:
+            response = await self._send(method, url, headers, params, json_data)
+        except httpx.TimeoutException as exc:
+            fresh = await self._reauth_once() if use_auth else None
+            if not fresh:
+                raise self._descriptive_timeout(exc, url) from exc
+            headers["Authorization"] = f"Bearer {fresh}"
+            try:
+                response = await self._send(method, url, headers, params, json_data)
+            except httpx.TimeoutException as exc2:
+                raise self._descriptive_timeout(exc2, url) from exc2
+            self._warn_if_still_unauthorized(response)
+            return response
         if use_auth and response.status_code == 401:
             fresh = await self._reauth_once()
             if fresh:
@@ -91,6 +112,18 @@ class APIClient:
                 response = await self._send(method, url, headers, params, json_data)
                 self._warn_if_still_unauthorized(response)
         return response
+
+    def _descriptive_timeout(self, exc: "httpx.TimeoutException", url: str):
+        """A same-typed timeout whose str() actually says what happened."""
+        detail = str(exc).strip()
+        msg = (f"request to {url} timed out after {self.timeout}s"
+               + (f" ({detail})" if detail else "")
+               + " — the server may be slow (escrow calls block on RPC confirmation);"
+                 " raise GT_HTTP_TIMEOUT (default 30) if this recurs")
+        try:
+            return type(exc)(msg)
+        except Exception:  # noqa: BLE001 — exotic exception signature: keep the original
+            return exc
 
     async def _reauth_once(self):
         """One-shot wallet re-auth after a 401 (key rotated/revoked elsewhere).

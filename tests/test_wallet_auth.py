@@ -168,10 +168,9 @@ def _challenge_body(kp, nonce="nonce-abc"):
 
 
 def _verify_body(created=True):
+    # Mirrors the live contract: the API key is THE credential — no JWT.
     return {
         "api_key": "gt_sk_minted_key_1",
-        "access_token": "jwt-token",
-        "token_type": "bearer",
         "user_id": "u-1",
         "agent": {"id": "a-1", "name": "agent-AbCdEfGh", "escrow_enabled": True,
                   "default_payer_pubkey": "x"},
@@ -356,6 +355,111 @@ class TestClient401Reauth:
             patcher.stop()
         assert resp.status_code == 201
         assert mock_client.post.call_count == 2
+
+
+# ---------------------------------------------------------------------------
+# timeout re-auth in APIClient (outsider-e2e F1, client leg)
+# ---------------------------------------------------------------------------
+
+class TestClientTimeoutReauth:
+    """A request timeout on an auth-carrying call may be a stale-key symptom
+    (a server-side auth stall outrunning the client timeout), so wallet mode
+    attempts the same one-shot re-auth as a 401 — and any surfaced timeout must
+    carry a real message (str(httpx.ReadTimeout()) is empty by default)."""
+
+    async def test_timeout_triggers_one_reauth_and_retry(self, kp):
+        import httpx
+        from groundtruther_mcp.client import APIClient
+
+        Config.API_KEY = "gt_sk_stale"
+        patcher, mock_client = _mock_http_seq(
+            "get", [httpx.ReadTimeout(""), (200, {"ok": True})])
+
+        async def fake_mint():
+            Config.API_KEY = "gt_sk_fresh"
+            return "gt_sk_fresh"
+
+        try:
+            with patch.object(wallet_auth, "mint_fresh_credentials", side_effect=fake_mint):
+                resp = await APIClient().get("/tasks/")
+        finally:
+            patcher.stop()
+        assert resp.status_code == 200
+        assert mock_client.get.call_count == 2
+        retry_headers = mock_client.get.call_args_list[1].kwargs["headers"]
+        assert retry_headers["Authorization"] == "Bearer gt_sk_fresh"
+
+    async def test_timeout_after_reauth_raises_descriptive_error(self, kp):
+        import httpx
+        from groundtruther_mcp.client import APIClient
+
+        Config.API_KEY = "gt_sk_stale"
+        patcher, mock_client = _mock_http_seq(
+            "get", [httpx.ReadTimeout(""), httpx.ReadTimeout("")])
+
+        async def fake_mint():
+            Config.API_KEY = "gt_sk_fresh"
+            return "gt_sk_fresh"
+
+        try:
+            with patch.object(wallet_auth, "mint_fresh_credentials", side_effect=fake_mint):
+                with pytest.raises(httpx.TimeoutException) as exc_info:
+                    await APIClient().get("/tasks/")
+        finally:
+            patcher.stop()
+        assert mock_client.get.call_count == 2  # exactly one retry, no loop
+        msg = str(exc_info.value)
+        assert msg  # never the empty "Network error: " again
+        assert "timed out" in msg
+        assert "GT_HTTP_TIMEOUT" in msg
+
+    async def test_pinned_env_key_timeout_never_reauths_but_message_is_descriptive(self, kp):
+        import httpx
+        from groundtruther_mcp.client import APIClient
+
+        os.environ["GT_API_KEY"] = "gt_sk_pinned"
+        Config.API_KEY = "gt_sk_pinned"
+        patcher, mock_client = _mock_http_seq("get", [httpx.ReadTimeout("")])
+        mint = AsyncMock()
+        try:
+            with patch.object(wallet_auth, "mint_fresh_credentials", mint):
+                with pytest.raises(httpx.TimeoutException) as exc_info:
+                    await APIClient().get("/tasks/")
+        finally:
+            patcher.stop()
+        mint.assert_not_called()
+        assert mock_client.get.call_count == 1
+        assert "timed out" in str(exc_info.value)
+
+    async def test_unauthenticated_call_timeout_never_reauths(self, kp):
+        import httpx
+        from groundtruther_mcp.client import APIClient
+
+        patcher, mock_client = _mock_http_seq("get", [httpx.ReadTimeout("")])
+        mint = AsyncMock()
+        try:
+            with patch.object(wallet_auth, "mint_fresh_credentials", mint):
+                with pytest.raises(httpx.TimeoutException):
+                    await APIClient().get("/public/", use_auth=False)
+        finally:
+            patcher.stop()
+        mint.assert_not_called()
+        assert mock_client.get.call_count == 1
+
+    async def test_non_timeout_transport_errors_pass_straight_through(self, kp):
+        import httpx
+        from groundtruther_mcp.client import APIClient
+
+        Config.API_KEY = "gt_sk_x"
+        patcher, mock_client = _mock_http_seq("get", [httpx.ConnectError("refused")])
+        mint = AsyncMock()
+        try:
+            with patch.object(wallet_auth, "mint_fresh_credentials", mint):
+                with pytest.raises(httpx.ConnectError):
+                    await APIClient().get("/tasks/")
+        finally:
+            patcher.stop()
+        mint.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

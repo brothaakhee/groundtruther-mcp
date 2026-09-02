@@ -19,7 +19,14 @@ uvx groundtruther-mcp
 ### Wallet-native setup (one env var)
 
 If you have a Solana wallet, you don't need to sign up at all — set
-`GT_SOLANA_PAYER_SK` and skip `GT_API_KEY` entirely:
+`GT_SOLANA_PAYER_SK` and skip `GT_API_KEY` entirely. No wallet yet? Generate a
+keypair with the [Solana CLI](https://docs.anza.xyz/cli/install):
+
+```bash
+solana-keygen new --outfile ~/.config/solana/groundtruther.json
+# GT_SOLANA_PAYER_SK accepts that file's contents verbatim (a JSON byte array)
+# or a base58-encoded secret key.
+```
 
 ```json
 {
@@ -42,14 +49,20 @@ machine and the signed payload can never be a transaction — and GroundTruther
 auto-provisions an escrow-enabled agent named `agent-<pubkey prefix>` with your
 wallet as its default payer, mints an API key, and the server stores it with
 `0600` permissions in `~/.groundtruther/credentials.json`. You'll see a log line
-like `authenticated as agent-AbCdEfGh via wallet ...` on startup. The client
+like `authenticated as agent-AbCdEfGh via wallet ...` on startup — it goes to
+**stderr**, which most MCP clients hide behind a log viewer. The client
 validates every challenge before signing (correct GT host, your own address,
 ASCII-only, nonce present, not transaction-shaped) and refuses loudly otherwise.
 
+- **The API key is THE credential.** `/auth/wallet/verify` returns only the API
+  key (no session JWT); everything the agent surface does authenticates with it,
+  and rotating it (below) is the complete revocation story.
 - **Key rotation:** delete the credentials entry (or hit a 401) and the server
   re-signs a challenge — each re-verify mints a fresh API key and revokes the
   old one. A 401 from a rotated/revoked key triggers exactly one automatic
-  re-auth before failing loudly.
+  re-auth before failing loudly. A request **timeout** on an authenticated call
+  gets the same one-shot re-auth (a stale key can surface as a stall instead of
+  a clean 401).
 - **Spend caps:** auto-provisioned agents start with default daily/weekly spend
   limits, enforced on both custodial and on-chain missions — a leaked API key
   can't drain your wallet mission-by-mission.
@@ -181,10 +194,19 @@ claim-approval gate), and when the verdict lands you pay with `release_mission`
 `get_qa_result` tells you which mode you're in and what to call.
 
 Requirements: `GT_SOLANA_PAYER_SK` set (JSON byte array or base58 secret), a funded
-devnet wallet, and escrow enablement on your Agent record (currently concierge
-onboarding — ask the GroundTruther team). Devnet only today. Full setup, the proven
-end-to-end devnet run, and the contract template live in the repo's
-`docs/qa-vertical-escrow.md`.
+devnet wallet, and escrow enablement on your Agent record (wallet-native agents are
+escrow-enabled at provisioning; classic agents are concierge — ask the GroundTruther
+team). Devnet only today. Full setup, the proven end-to-end devnet run, and the
+contract template live in the repo's `docs/qa-vertical-escrow.md`.
+
+**Funding the wallet (honest devnet notes):** SOL for transaction fees is
+self-serve — `solana airdrop 1 <your pubkey> --url devnet`. Test-USDC is
+**concierge for now**: there is no faucet, so ask the GroundTruther team for a
+top-up before your first escrow mission. If you try to fund with an empty
+wallet, the error tells you exactly what's missing (SOL vs USDC, with current
+balances) — and note the mission is still **created but unfunded** in that case:
+retry with a new `request_qa_test` after topping up, or clean up with
+`cancel_mission(task_id)` (the error message includes the id).
 
 ## Example Workflow
 
@@ -232,7 +254,7 @@ Missions can also be `CANCELLED` (by agent) or `EXPIRED` (past deadline).
 | `GT_API_URL` | No | `http://localhost:8001/api/v1` | API base URL (default matches the local docker-compose stack) |
 | `GT_ESCROW_ENABLED` | No | `false` | Enable the on-chain escrow tools without a payer key (Mode B) |
 | `GT_CREDENTIALS_PATH` | No | `~/.groundtruther/credentials.json` | Where wallet-native minted API keys are stored (0600) |
-| `GT_HTTP_TIMEOUT` | No | `30` | Per-request timeout in seconds (raise for slow escrow RPC confirmation) |
+| `GT_HTTP_TIMEOUT` | No | `30` | Per-request timeout in seconds. **Raise this (e.g. `60`–`90`) when using escrow**: fund/release calls block server-side on Solana RPC confirmation and can exceed 30s. In wallet-native mode a timeout on an authenticated call also triggers one automatic re-auth (a stale key can stall instead of returning 401) |
 
 ## Development
 
@@ -242,6 +264,25 @@ pip install -e ".[dev]"
 # Run tests
 pytest tests/ -v
 ```
+
+### In-process use (no stdio server)
+
+The MCP stdio transport is the supported integration, but every tool is a plain
+async function you can import and call directly — useful for test harnesses and
+embedding:
+
+```python
+from groundtruther_mcp.tools_qa import request_qa_test, get_qa_result
+
+result = await request_qa_test(staging_url="https://staging.example.com",
+                               steps='[{"instruction": "...", "expected": "..."}]')
+```
+
+Configuration still comes from the environment (`GT_API_KEY`/`GT_API_URL`, or
+wallet-native via `GT_SOLANA_PAYER_SK` — call
+`await groundtruther_mcp.wallet_auth.ensure_wallet_credentials()` once at
+startup to run the same auto-auth bootstrap the server performs). Tools return
+JSON strings, errors as `{"error": "..."}`.
 
 ## Troubleshooting
 

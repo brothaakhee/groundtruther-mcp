@@ -1008,7 +1008,9 @@ class TestRequestQaTestEscrow:
     @pytest.mark.asyncio
     async def test_escrow_submit_fund_failure_surfaces_stage_and_detail(
             self, mission_uuid, staging_url, steps_json):
-        """A failed fund submission surfaces the stage and backend detail."""
+        """A failed fund submission surfaces the stage, backend detail, AND the
+        dangling-mission state (e2e F4): the create succeeded, so the agent must
+        learn the task_id, that it sits OPEN-but-unfunded, and how to clean up."""
         from groundtruther_mcp.tools_qa import request_qa_test
 
         patcher, _ = _mock_http_seq("post", [
@@ -1024,6 +1026,37 @@ class TestRequestQaTestEscrow:
             assert "submit-fund failed" in error
             assert "400" in error
             assert "Blockhash expired" in error
+            # F4: no silent dangling OPEN missions.
+            assert mission_uuid in error
+            assert "unfunded" in error.lower()
+            assert "cancel_mission" in error
+        finally:
+            patcher.stop()
+
+    @pytest.mark.asyncio
+    async def test_escrow_fund_failure_passes_backend_funding_diagnosis_through(
+            self, mission_uuid, staging_url, steps_json):
+        """The backend's balance diagnosis (F2) must reach the agent verbatim."""
+        from groundtruther_mcp.tools_qa import request_qa_test
+
+        diagnosis = ("Cannot fund this mission from wallet BjBP14zq: it holds 0.0000 SOL "
+                     "— not enough to pay transaction fees. Get free devnet SOL: "
+                     "`solana airdrop 1 BjBP14zq --url devnet`.")
+        patcher, _ = _mock_http_seq("post", [
+            (201, _escrow_create_response(mission_uuid)),
+            (400, {"detail": diagnosis,
+                   "chain_error": {"code": "SimulationFailed", "logs": []},
+                   "funding": {"sol_lamports": 0, "usdc_base": None}}),
+        ])
+        try:
+            with patch("groundtruther_mcp.tools_qa.SolanaSigner", return_value=_mock_signer()):
+                result = await request_qa_test(
+                    staging_url=staging_url, steps=steps_json, escrow=True)
+
+            error = json.loads(result)["error"]
+            assert "solana airdrop" in error
+            assert "0.0000 SOL" in error
+            assert mission_uuid in error  # the dangling-mission note rides along
         finally:
             patcher.stop()
 
@@ -1053,12 +1086,14 @@ class TestRequestQaTestEscrow:
 class TestGetQaResultEscrow:
     """get_qa_result on escrow missions: same joins, release_mission guidance."""
 
-    def _escrow_mission_detail(self, mission_uuid, onchain_status="IN_REVIEW"):
+    def _escrow_mission_detail(self, mission_uuid, onchain_status="IN_REVIEW",
+                               auto_claim=True):
         return {
             "task_id": mission_uuid,
             "onchain_status": onchain_status,
             "mission_pda": MISSION_PDA,
             "fund_sig": FUND_SIG,
+            "auto_claim": auto_claim,
         }
 
     @pytest.mark.asyncio
@@ -1143,6 +1178,121 @@ class TestGetQaResultEscrow:
             assert response["mode"] == "escrow"
             assert "release_mission" in response["next_action"]
             assert "escalate_mission_onchain" in response["next_action"]
+        finally:
+            patcher.stop()
+
+    # ---- escrow-awareness in ALL states (e2e F3) ----------------------------
+
+    @pytest.mark.asyncio
+    async def test_pending_escrow_auto_claim_is_escrow_aware_with_no_approval_advice(
+            self, mission_uuid, qa_contract):
+        """F3: a FUNDED auto-claim escrow mission pre-verdict must carry
+        mode=escrow and must NOT tell the agent to wait for claim approval —
+        auto-claim has no approval gate (the old advice contradicted the
+        request_qa_test response one call earlier)."""
+        from groundtruther_mcp.tools_qa import get_qa_result
+
+        os.environ["GT_ESCROW_ENABLED"] = "true"
+        task = _make_task_response(mission_uuid, qa_contract, status="OPEN")
+        patcher, mock_client = _mock_http_seq("get", [
+            (200, task),
+            (200, self._escrow_mission_detail(mission_uuid, onchain_status="FUNDED")),
+        ])
+        try:
+            response = json.loads(await get_qa_result(mission_uuid))
+            assert response["status"] == "pending"
+            assert response["mode"] == "escrow"
+            assert response["onchain_status"] == "FUNDED"
+            assert response["mission_pda"] == MISSION_PDA
+            na = response["next_action"].lower()
+            assert "claim" in na and "instantly" in na
+            assert "no approval" in na
+            assert "your approval" not in na
+            assert "claim_request_received" not in na
+            assert "release_mission" in na
+            # No claim-request lookup on an auto-claim mission: task + probe only.
+            assert mock_client.get.call_count == 2
+        finally:
+            patcher.stop()
+
+    @pytest.mark.asyncio
+    async def test_pending_escrow_without_auto_claim_keeps_the_approval_gate(
+            self, mission_uuid, qa_contract):
+        """Non-auto-claim escrow missions DO have an approval gate — keep it."""
+        from groundtruther_mcp.tools_qa import get_qa_result
+
+        os.environ["GT_ESCROW_ENABLED"] = "true"
+        task = _make_task_response(mission_uuid, qa_contract, status="OPEN")
+        patcher, mock_client = _mock_http_seq("get", [
+            (200, task),
+            (200, self._escrow_mission_detail(
+                mission_uuid, onchain_status="FUNDED", auto_claim=False)),
+            (200, {"results": []}),  # claim-request lookup still happens
+        ])
+        try:
+            response = json.loads(await get_qa_result(mission_uuid))
+            assert response["mode"] == "escrow"
+            assert response["status"] == "pending"
+            assert mock_client.get.call_count == 3
+        finally:
+            patcher.stop()
+
+    @pytest.mark.asyncio
+    async def test_claimed_escrow_mission_is_escrow_aware(self, mission_uuid, qa_contract):
+        from groundtruther_mcp.tools_qa import get_qa_result
+
+        os.environ["GT_ESCROW_ENABLED"] = "true"
+        task = _make_task_response(mission_uuid, qa_contract, status="CLAIMED")
+        patcher, _ = _mock_http_seq("get", [
+            (200, task),
+            (200, self._escrow_mission_detail(mission_uuid, onchain_status="ASSIGNED")),
+        ])
+        try:
+            response = json.loads(await get_qa_result(mission_uuid))
+            assert response["status"] == "claimed"
+            assert response["mode"] == "escrow"
+            assert response["onchain_status"] == "ASSIGNED"
+            assert "release_mission" in response["next_action"]
+            assert "approve_mission does not apply" in response["next_action"]
+        finally:
+            patcher.stop()
+
+    @pytest.mark.asyncio
+    async def test_in_progress_escrow_mission_is_escrow_aware(self, mission_uuid, qa_contract):
+        from groundtruther_mcp.tools_qa import get_qa_result
+
+        os.environ["GT_ESCROW_ENABLED"] = "true"
+        task = _make_task_response(mission_uuid, qa_contract, status="IN_PROGRESS")
+        patcher, _ = _mock_http_seq("get", [
+            (200, task),
+            (200, self._escrow_mission_detail(mission_uuid, onchain_status="ASSIGNED")),
+        ])
+        try:
+            response = json.loads(await get_qa_result(mission_uuid))
+            assert response["status"] == "in_progress"
+            assert response["mode"] == "escrow"
+            assert "release_mission" in response["next_action"]
+        finally:
+            patcher.stop()
+
+    @pytest.mark.asyncio
+    async def test_completed_escrow_mission_reports_onchain_payment(
+            self, mission_uuid, qa_contract):
+        from groundtruther_mcp.tools_qa import get_qa_result
+
+        os.environ["GT_ESCROW_ENABLED"] = "true"
+        proof = _make_qa_proof([("s1", "pass", None), ("s2", "pass", None)], "pass")
+        task = _make_task_response(mission_uuid, qa_contract, status="COMPLETED", proofs=[proof])
+        patcher, _ = _mock_http_seq("get", [
+            (200, task),
+            (200, self._escrow_mission_detail(mission_uuid, onchain_status="RELEASED")),
+        ])
+        try:
+            response = json.loads(await get_qa_result(mission_uuid))
+            assert response["status"] == "completed"
+            assert response["mode"] == "escrow"
+            assert response["onchain_status"] == "RELEASED"
+            assert "released from escrow" in response["next_action"]
         finally:
             patcher.stop()
 
