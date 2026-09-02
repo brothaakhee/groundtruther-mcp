@@ -41,6 +41,20 @@ from .tools_escrow import (
 
 def main():
     """Run the MCP server."""
+    # Wallet-native auto-auth: with no GT_API_KEY but a GT_SOLANA_PAYER_SK, mint
+    # (or load the stored) API key by signing a SIWS challenge with the local
+    # payer key. The key never leaves this machine; the minted credential is
+    # persisted 0600 under ~/.groundtruther/credentials.json.
+    import asyncio
+    from .wallet_auth import WalletAuthError, ensure_wallet_credentials
+    try:
+        auth_note = asyncio.run(ensure_wallet_credentials())
+    except WalletAuthError as e:
+        print(f"Wallet auth error: {e}", file=sys.stderr)
+        sys.exit(1)
+    if auth_note:
+        print(f"groundtruther-mcp: {auth_note}", file=sys.stderr)
+
     # Validate configuration
     try:
         Config.validate()

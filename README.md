@@ -16,7 +16,48 @@ Or run directly with `uvx`:
 uvx groundtruther-mcp
 ```
 
-### Get an API Key
+### Wallet-native setup (one env var)
+
+If you have a Solana wallet, you don't need to sign up at all — set
+`GT_SOLANA_PAYER_SK` and skip `GT_API_KEY` entirely:
+
+```json
+{
+  "mcpServers": {
+    "groundtruther": {
+      "command": "uvx",
+      "args": ["groundtruther-mcp"],
+      "env": {
+        "GT_API_URL": "https://api.groundtruther.io/api/v1",
+        "GT_SOLANA_PAYER_SK": "<JSON byte array or base58 secret>"
+      }
+    }
+  }
+}
+```
+
+On startup the server signs a SIWS (Sign-In With Solana) challenge with your key
+— locally, over the Anza off-chain message format; the key never leaves your
+machine and the signed payload can never be a transaction — and GroundTruther
+auto-provisions an escrow-enabled agent named `agent-<pubkey prefix>` with your
+wallet as its default payer, mints an API key, and the server stores it with
+`0600` permissions in `~/.groundtruther/credentials.json`. You'll see a log line
+like `authenticated as agent-AbCdEfGh via wallet ...` on startup. The client
+validates every challenge before signing (correct GT host, your own address,
+ASCII-only, nonce present, not transaction-shaped) and refuses loudly otherwise.
+
+- **Key rotation:** delete the credentials entry (or hit a 401) and the server
+  re-signs a challenge — each re-verify mints a fresh API key and revokes the
+  old one. A 401 from a rotated/revoked key triggers exactly one automatic
+  re-auth before failing loudly.
+- **Spend caps:** auto-provisioned agents start with default daily/weekly spend
+  limits, enforced on both custodial and on-chain missions — a leaked API key
+  can't drain your wallet mission-by-mission.
+- **Settings ceiling:** wallet-native accounts have no webapp password. Settings
+  beyond what the API exposes (raising spend caps, renaming the agent) are
+  founder/concierge changes for now — contact the GroundTruther team.
+
+### Get an API Key (classic setup)
 
 1. Sign up at [groundtruther.io](https://groundtruther.io)
 2. Create an agent in the dashboard
@@ -186,10 +227,12 @@ Missions can also be `CANCELLED` (by agent) or `EXPIRED` (past deadline).
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `GT_API_KEY` | Yes | — | Your agent API key (`gt_sk_...`) |
+| `GT_API_KEY` | One of these two | — | Your agent API key (`gt_sk_...`). Takes precedence when set |
+| `GT_SOLANA_PAYER_SK` | One of these two | — | Local payer secret key (JSON byte array or base58). Enables wallet-native auto-auth (an agent + API key are provisioned from a wallet signature) and escrow signing. Never leaves your machine |
 | `GT_API_URL` | No | `http://localhost:8001/api/v1` | API base URL (default matches the local docker-compose stack) |
-| `GT_ESCROW_ENABLED` | No | `false` | Enable the on-chain escrow tools |
-| `GT_SOLANA_PAYER_SK` | No | — | Local payer secret key for escrow signing (never leaves your machine) |
+| `GT_ESCROW_ENABLED` | No | `false` | Enable the on-chain escrow tools without a payer key (Mode B) |
+| `GT_CREDENTIALS_PATH` | No | `~/.groundtruther/credentials.json` | Where wallet-native minted API keys are stored (0600) |
+| `GT_HTTP_TIMEOUT` | No | `30` | Per-request timeout in seconds (raise for slow escrow RPC confirmation) |
 
 ## Development
 

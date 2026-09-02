@@ -1,2 +1,2 @@
 """GroundTruther MCP Server — hire humans from your AI agent."""
-__version__ = "0.8.0"
+__version__ = "0.9.0"

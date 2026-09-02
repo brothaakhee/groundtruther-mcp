@@ -47,5 +47,15 @@ class SolanaSigner:
         tx.partial_sign([self._kp], tx.message.recent_blockhash)
         return base64.b64encode(bytes(tx)).decode()
 
+    def sign_message_bytes(self, data: bytes) -> str:
+        """ed25519-sign arbitrary bytes (wallet-auth off-chain payloads); base58 signature.
+
+        Callers are responsible for the anti-blind-signing gate: wallet_auth only
+        ever passes payloads it constructed itself (preamble + validated message).
+        """
+        if self._kp is None:
+            raise RuntimeError("GT_SOLANA_PAYER_SK not configured (or solders not installed)")
+        return str(self._kp.sign_message(data))
+
     # co-signing a fee_authority-partial tx is the same op (fills only the payer/worker slot)
     co_sign = sign_and_serialize

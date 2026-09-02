@@ -24,11 +24,19 @@ class Config:
 
     @classmethod
     def validate(cls) -> None:
-        """Validate configuration."""
+        """Validate configuration.
+
+        Called AFTER the wallet-auth bootstrap: in wallet-native mode (GT_API_KEY
+        unset, GT_SOLANA_PAYER_SK set) the bootstrap has already minted/loaded an
+        API key into cls.API_KEY, so reaching here without one means neither
+        credential path is configured.
+        """
         if not cls.API_KEY:
             raise ValueError(
-                "GT_API_KEY environment variable is required. "
-                "Format: gt_sk_..."
+                "No credentials configured. Set GT_API_KEY (gt_sk_...) or, for "
+                "wallet-native auto-auth, GT_SOLANA_PAYER_SK (your Solana payer "
+                "secret key — an agent and API key are provisioned automatically "
+                "from a wallet signature)."
             )
         if not cls.API_KEY.startswith("gt_sk_"):
             raise ValueError(
